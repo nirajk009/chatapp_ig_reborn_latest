@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>n-chat | Admin Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+    <style>
+        :root {
+            --primary: #952cb1; --primary-dim: #871ba4; --primary-container: #f1a6ff;
+            --on-primary: #fff7fb; --on-primary-container: #680082;
+            --secondary-container: #fed6ff; --on-secondary-container: #7d308d;
+            --surface: #fff7fb; --surface-container-low: #ffeffc;
+            --surface-container-high: #fedeff; --surface-container-highest: #fdd6ff;
+            --on-surface: #45274b; --on-surface-variant: #75547a;
+            --outline: #926f97; --outline-variant: #cca5d0;
+            --green: #4ade80; --error: #ac3149;
+            --font: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+        html { font-size: 16px; -webkit-font-smoothing: antialiased; }
+        body {
+            font-family: var(--font); background: var(--surface); color: var(--on-surface);
+            min-height: 100dvh; overflow-x: hidden;
+        }
+        ::selection { background: var(--primary-container); color: var(--on-primary-container); }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        ::-webkit-scrollbar { display: none; }
+        * { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* ── Layout: 2-panel on desktop, panel switching on mobile ── */
+        .app { display: flex; height: 100dvh; }
+
+        /* ── Sidebar (Conversations List) ── */
+        .sidebar {
+            width: 100%; max-width: 380px; border-right: 1px solid rgba(204,165,208,0.1);
+            display: flex; flex-direction: column; background: var(--surface);
+            position: relative; z-index: 10;
+        }
+        .sidebar-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 1rem 1.25rem; border-bottom: 1px solid rgba(204,165,208,0.08);
+        }
+        .sidebar-header__left { display: flex; align-items: center; gap: 0.5rem; }
+        .sidebar-header__title { font-weight: 800; font-size: 1.25rem; color: var(--primary); }
+        .sidebar-header__badge {
+            background: var(--primary); color: var(--on-primary);
+            font-size: 0.6rem; font-weight: 700; padding: 0.2rem 0.5rem;
+            border-radius: 999px; min-width: 1.2rem; text-align: center; display: none;
+        }
+        .sidebar-header__badge.show { display: inline-block; }
+        .sidebar-header__actions { display: flex; gap: 0.25rem; }
+        .icon-btn {
+            background: none; border: none; color: var(--on-surface-variant); cursor: pointer;
+            padding: 0.5rem; border-radius: 50%; transition: all 0.2s; display: flex;
+        }
+        .icon-btn:hover { background: var(--surface-container-high); color: var(--primary); }
+
+        .sidebar-search { padding: 0.5rem 1rem; }
+        .search-input {
+            width: 100%; background: var(--surface-container-low); border: none; border-radius: 999px;
+            padding: 0.7rem 1rem 0.7rem 2.5rem; font-family: var(--font); font-size: 0.85rem;
+            color: var(--on-surface); outline: none; transition: all 0.2s;
+        }
+        .search-input::placeholder { color: rgba(117,84,122,0.4); }
+        .search-input:focus { box-shadow: 0 0 0 2px rgba(149,44,177,0.12); }
+        .search-wrap { position: relative; }
+        .search-wrap .material-symbols-outlined {
+            position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%);
+            font-size: 1.1rem; color: rgba(117,84,122,0.4); pointer-events: none;
+        }
+
+        .conversation-list { flex: 1; overflow-y: auto; }
+        .conv-item {
+            display: flex; align-items: center; gap: 0.9rem; padding: 0.9rem 1.25rem;
+            cursor: pointer; transition: all 0.15s; border-bottom: 1px solid rgba(204,165,208,0.05);
+        }
+        .conv-item:hover { background: var(--surface-container-low); }
+        .conv-item.active { background: var(--surface-container-high); }
+
+        .conv-avatar {
+            width: 2.75rem; height: 2.75rem; border-radius: 0.75rem; flex-shrink: 0;
+            background: linear-gradient(135deg, var(--primary-container), var(--secondary-container));
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 700; font-size: 0.95rem; color: var(--on-primary-container);
+            position: relative;
+        }
+        .conv-avatar__status {
+            position: absolute; bottom: -2px; right: -2px; width: 0.65rem; height: 0.65rem;
+            border-radius: 50%; border: 2px solid var(--surface);
+            background: var(--outline-variant);
+        }
+        .conv-avatar__status.online { background: var(--green); }
+
+        .conv-info { flex: 1; min-width: 0; }
+        .conv-name { font-weight: 700; font-size: 0.9rem; color: var(--on-surface); line-height: 1.3; }
+        .conv-preview {
+            font-size: 0.78rem; color: var(--on-surface-variant); white-space: nowrap;
+            overflow: hidden; text-overflow: ellipsis; line-height: 1.3;
+        }
+        .conv-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 0.3rem; flex-shrink: 0; }
+        .conv-time { font-size: 0.65rem; color: var(--on-surface-variant); font-weight: 500; }
+        .conv-unread {
+            background: var(--primary); color: var(--on-primary);
+            font-size: 0.6rem; font-weight: 700; min-width: 1.1rem; text-align: center;
+            padding: 0.15rem 0.35rem; border-radius: 999px; display: none;
+        }
+        .conv-unread.show { display: inline-block; }
+
+        .empty-sidebar {
+            flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            gap: 0.5rem; color: var(--on-surface-variant);
+        }
+        .empty-sidebar .material-symbols-outlined { font-size: 2.5rem; color: var(--primary-container); }
+        .empty-sidebar p { font-size: 0.85rem; }
+
+        /* ── Chat Panel ── */
+        .chat-panel {
+            flex: 1; display: flex; flex-direction: column; background: var(--surface);
+            position: relative;
+        }
+
+        .chat-panel__header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0.75rem 1.25rem; border-bottom: 1px solid rgba(204,165,208,0.08);
+            background: rgba(255,247,251,0.9); backdrop-filter: blur(12px);
+        }
+        .chat-panel__user { display: flex; align-items: center; gap: 0.75rem; }
+        .chat-panel__back {
+            display: none; background: none; border: none; color: var(--on-surface-variant);
+            cursor: pointer; padding: 0.3rem; border-radius: 50;
+        }
+        .chat-panel__avatar {
+            width: 2.25rem; height: 2.25rem; border-radius: 0.6rem;
+            background: linear-gradient(135deg, var(--primary-container), var(--secondary-container));
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 700; font-size: 0.85rem; color: var(--on-primary-container);
+        }
+        .chat-panel__name { font-weight: 700; font-size: 0.95rem; }
+        .chat-panel__status {
+            font-size: 0.6rem; font-weight: 600; color: var(--on-surface-variant);
+            text-transform: uppercase; letter-spacing: 0.04em;
+        }
+        .chat-panel__status.online { color: var(--primary); }
+
+        .chat-messages {
+            flex: 1; overflow-y: auto; padding: 1.25rem; display: flex;
+            flex-direction: column; gap: 1rem;
+        }
+        .chat-messages .day-divider { display: flex; justify-content: center; margin: 0.25rem 0; }
+        .chat-messages .day-divider span {
+            background: var(--surface-container-low); padding: 0.25rem 0.75rem; border-radius: 999px;
+            font-size: 0.6rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+            color: var(--on-surface-variant);
+        }
+
+        .msg-group {
+            display: flex; flex-direction: column; gap: 0.35rem; max-width: 80%;
+            animation: msgIn 0.2s ease-out;
+        }
+        @keyframes msgIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
+        .msg-group--received { align-items: flex-start; align-self: flex-start; }
+        .msg-group--sent { align-items: flex-end; align-self: flex-end; }
+
+        .bubble { padding: 0.7rem 1rem; font-size: 0.875rem; line-height: 1.5; word-break: break-word; }
+        .bubble--received {
+            background: var(--surface-container-highest); color: var(--on-surface);
+            border-radius: 1.1rem; border-bottom-left-radius: 0.3rem;
+        }
+        .bubble--sent {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dim));
+            color: var(--on-primary); border-radius: 1.1rem; border-bottom-right-radius: 0.3rem;
+            box-shadow: 0 2px 8px rgba(149,44,177,0.1);
+        }
+        .timestamp { font-size: 0.575rem; font-weight: 500; color: rgba(117,84,122,0.5); }
+
+        .chat-input {
+            padding: 0.5rem 0.75rem 0.75rem; border-top: 1px solid rgba(204,165,208,0.06);
+            background: rgba(255,247,251,0.92); backdrop-filter: blur(16px);
+        }
+        .chat-input__inner {
+            display: flex; align-items: center; gap: 0.4rem;
+            background: var(--surface-container-high); border-radius: 999px;
+            padding: 0.25rem 0.25rem 0.25rem 0.75rem;
+        }
+        .chat-input__field {
+            flex: 1; background: transparent; border: none; color: var(--on-surface);
+            font-family: var(--font); font-size: 0.875rem; outline: none; min-width: 0;
+        }
+        .chat-input__field::placeholder { color: rgba(117,84,122,0.45); }
+        .chat-send {
+            width: 2.25rem; height: 2.25rem; border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary), var(--primary-container));
+            color: var(--on-primary); border: none; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 2px 8px rgba(149,44,177,0.2); transition: all 0.2s; flex-shrink: 0;
+        }
+        .chat-send:hover { transform: scale(1.05); }
+        .chat-send:active { transform: scale(0.92); }
+        .chat-send .material-symbols-outlined { font-variation-settings: 'FILL' 1; font-size: 1rem; }
+
+        /* Empty chat panel */
+        .chat-empty {
+            flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            gap: 0.75rem; color: var(--on-surface-variant);
+        }
+        .chat-empty .material-symbols-outlined { font-size: 3rem; color: var(--primary-container); }
+        .chat-empty p { font-size: 0.9rem; }
+
+        /* ── Mobile: panel switching ── */
+        @media (max-width: 768px) {
+            .sidebar { max-width: 100%; }
+            .chat-panel { position: fixed; inset: 0; z-index: 20; transform: translateX(100%); transition: transform 0.25s ease; }
+            .chat-panel.open { transform: translateX(0); }
+            .chat-panel__back { display: flex; }
+        }
+
+        /* ── Loading ── */
+        .loading { display: flex; align-items: center; justify-content: center; height: 100dvh; }
+        .loading-spinner {
+            width: 2rem; height: 2rem; border: 3px solid var(--surface-container-highest);
+            border-top-color: var(--primary); border-radius: 50%; animation: spin 0.7s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="app" id="app">
+        <!-- Sidebar -->
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-header__left">
+                    <span class="material-symbols-outlined" style="color:var(--primary); font-size:1.5rem;">bubble_chart</span>
+                    <span class="sidebar-header__title">Pulse</span>
+                    <span class="sidebar-header__badge" id="totalBadge">0</span>
+                </div>
+                <div class="sidebar-header__actions">
+                    <button class="icon-btn" id="logoutBtn" title="Logout">
+                        <span class="material-symbols-outlined">logout</span>
+                    </button>
+                </div>
+            </div>
+            <div class="sidebar-search">
+                <div class="search-wrap">
+                    <span class="material-symbols-outlined">search</span>
+                    <input class="search-input" id="searchInput" type="text" placeholder="Search conversations..." />
+                </div>
+            </div>
+            <div class="conversation-list" id="convList">
+                <div class="empty-sidebar" id="emptySidebar">
+                    <span class="material-symbols-outlined">forum</span>
+                    <p>No conversations yet</p>
+                    <p style="font-size:0.75rem;">Share your visitor link to get started</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat Panel -->
+        <div class="chat-panel" id="chatPanel">
+            <!-- Empty state (default) -->
+            <div class="chat-empty" id="chatEmpty">
+                <span class="material-symbols-outlined">chat</span>
+                <p>Select a conversation</p>
+            </div>
+
+            <!-- Active chat -->
+            <div id="activeChat" style="display:none; flex-direction:column; height:100%;">
+                <div class="chat-panel__header">
+                    <div class="chat-panel__user">
+                        <button class="chat-panel__back" id="chatBack">
+                            <span class="material-symbols-outlined">arrow_back</span>
+                        </button>
+                        <div class="chat-panel__avatar" id="chatAvatar">V</div>
+                        <div>
+                            <div class="chat-panel__name" id="chatName">Visitor</div>
+                            <div class="chat-panel__status" id="chatStatus">offline</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="chat-messages" id="chatMessages"></div>
+                <div class="chat-input">
+                    <div class="chat-input__inner">
+                        <input class="chat-input__field" id="chatInput" type="text" placeholder="Write a reply..." autocomplete="off" />
+                        <button class="chat-send" id="chatSend">
+                            <span class="material-symbols-outlined">send</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="api.js"></script>
+    <script>
+        // ── Auth Guard ──
+        if (!NChat.Admin.isLoggedIn()) {
+            window.location.href = 'admin-login.html';
+        }
+
+        // ── State ──
+        let conversations = [];
+        let activeVisitorId = null;
+        let searchQuery = '';
+
+        // ── DOM ──
+        const convList = document.getElementById('convList');
+        const emptySidebar = document.getElementById('emptySidebar');
+        const chatPanel = document.getElementById('chatPanel');
+        const chatEmpty = document.getElementById('chatEmpty');
+        const activeChat = document.getElementById('activeChat');
+        const chatMessages = document.getElementById('chatMessages');
+        const chatInput = document.getElementById('chatInput');
+        const chatSend = document.getElementById('chatSend');
+        const chatName = document.getElementById('chatName');
+        const chatAvatar = document.getElementById('chatAvatar');
+        const chatStatus = document.getElementById('chatStatus');
+        const totalBadge = document.getElementById('totalBadge');
+        const searchInput = document.getElementById('searchInput');
+
+        // ── Load Conversations ──
+        async function loadConversations() {
+            try {
+                const data = await NChat.Admin.getConversations();
+                conversations = data.conversations;
+                renderConversations();
+            } catch (err) {
+                if (err.status === 401) {
+                    NChat.Admin.clearToken();
+                    window.location.href = 'admin-login.html';
+                }
+            }
+        }
+
+        function renderConversations() {
+            const filtered = conversations.filter(c => {
+                if (!searchQuery) return true;
+                const q = searchQuery.toLowerCase();
+                return (c.name && c.name.toLowerCase().includes(q)) ||
+                       (c.email && c.email.toLowerCase().includes(q));
+            });
+
+            // Keep empty sidebar or render list
+            const existingItems = convList.querySelectorAll('.conv-item');
+            existingItems.forEach(el => el.remove());
+
+            if (filtered.length === 0) {
+                emptySidebar.style.display = '';
+                return;
+            }
+            emptySidebar.style.display = 'none';
+
+            let totalUnread = 0;
+            filtered.forEach(c => {
+                totalUnread += c.unread_count || 0;
+                const el = document.createElement('div');
+                el.className = `conv-item${activeVisitorId === c.id ? ' active' : ''}`;
+                el.dataset.id = c.id;
+
+                const initials = (c.name || 'V').split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
+                const preview = c.last_message
+                    ? (c.last_message.sender_type === 'admin' ? 'You: ' : '') + c.last_message.body
+                    : 'No messages yet';
+                const time = c.last_message ? c.last_message.time : '';
+
+                el.innerHTML = `
+                    <div class="conv-avatar">
+                        ${initials}
+                        <div class="conv-avatar__status ${c.is_online ? 'online' : ''}"></div>
+                    </div>
+                    <div class="conv-info">
+                        <div class="conv-name">${c.name || 'Visitor #' + c.id}</div>
+                        <div class="conv-preview">${preview}</div>
+                    </div>
+                    <div class="conv-meta">
+                        <span class="conv-time">${time}</span>
+                        <span class="conv-unread ${c.unread_count > 0 ? 'show' : ''}">${c.unread_count}</span>
+                    </div>
+                `;
+
+                el.addEventListener('click', () => openChat(c.id));
+                convList.appendChild(el);
+            });
+
+            // Update badge
+            if (totalUnread > 0) {
+                totalBadge.textContent = totalUnread;
+                totalBadge.classList.add('show');
+                document.title = `(${totalUnread}) n-chat | Admin`;
+            } else {
+                totalBadge.classList.remove('show');
+                document.title = 'n-chat | Admin Dashboard';
+            }
+        }
+
+        // ── Open Chat ──
+        async function openChat(visitorId) {
+            activeVisitorId = visitorId;
+            NChat.Admin.stopConversationPolling();
+
+            // Update UI
+            chatEmpty.style.display = 'none';
+            activeChat.style.display = 'flex';
+            chatPanel.classList.add('open'); // mobile
+
+            // Mark active in sidebar
+            convList.querySelectorAll('.conv-item').forEach(el => {
+                el.classList.toggle('active', parseInt(el.dataset.id) === visitorId);
+            });
+
+            try {
+                const data = await NChat.Admin.getMessages(visitorId);
+                const visitor = data.visitor;
+
+                chatName.textContent = visitor.name || 'Visitor #' + visitor.id;
+                chatAvatar.textContent = (visitor.name || 'V').charAt(0).toUpperCase();
+                chatStatus.textContent = visitor.is_online ? 'online' : 'offline';
+                chatStatus.className = `chat-panel__status ${visitor.is_online ? 'online' : ''}`;
+
+                // Render messages
+                chatMessages.innerHTML = '';
+                if (data.messages.length > 0) {
+                    addDayDivider('Today');
+                    data.messages.forEach(m => appendChatMessage(m));
+                }
+                scrollChatToBottom();
+
+                // Start polling this conversation
+                NChat.Admin.startConversationPolling(visitorId, (msgs, online) => {
+                    msgs.forEach(m => appendChatMessage(m));
+                    scrollChatToBottom();
+
+                    chatStatus.textContent = online ? 'online' : 'offline';
+                    chatStatus.className = `chat-panel__status ${online ? 'online' : ''}`;
+
+                    // Also refresh conversation list
+                    loadConversations();
+                });
+
+            } catch (err) {
+                console.error('Open chat error:', err);
+            }
+        }
+
+        function appendChatMessage(msg) {
+            const isSent = msg.sender_type === 'admin';
+            const group = document.createElement('div');
+            group.className = `msg-group msg-group--${isSent ? 'sent' : 'received'}`;
+
+            const bubble = document.createElement('div');
+            bubble.className = `bubble bubble--${isSent ? 'sent' : 'received'}`;
+            bubble.textContent = msg.body;
+
+            const ts = document.createElement('span');
+            ts.className = 'timestamp';
+            ts.textContent = msg.time;
+
+            group.appendChild(bubble);
+            group.appendChild(ts);
+            chatMessages.appendChild(group);
+        }
+
+        function addDayDivider(label) {
+            const div = document.createElement('div');
+            div.className = 'day-divider';
+            div.innerHTML = `<span>${label}</span>`;
+            chatMessages.appendChild(div);
+        }
+
+        function scrollChatToBottom() {
+            requestAnimationFrame(() => { chatMessages.scrollTop = chatMessages.scrollHeight; });
+        }
+
+        // ── Send Message (Admin) ──
+        async function adminSend() {
+            const text = chatInput.value.trim();
+            if (!text || !activeVisitorId) return;
+
+            chatInput.value = '';
+
+            // Optimistic
+            const temp = {
+                id: Date.now(), sender_type: 'admin', body: text,
+                time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+            };
+            appendChatMessage(temp);
+            scrollChatToBottom();
+
+            try {
+                await NChat.Admin.sendMessage(activeVisitorId, text);
+                loadConversations();
+            } catch (err) {
+                console.error('Send error:', err);
+            }
+        }
+
+        chatSend.addEventListener('click', adminSend);
+        chatInput.addEventListener('keydown', e => {
+            if (e.key === 'Enter') { e.preventDefault(); adminSend(); }
+        });
+
+        // ── Back button (mobile) ──
+        document.getElementById('chatBack').addEventListener('click', () => {
+            chatPanel.classList.remove('open');
+            NChat.Admin.stopConversationPolling();
+            activeVisitorId = null;
+        });
+
+        // ── Search ──
+        searchInput.addEventListener('input', () => {
+            searchQuery = searchInput.value.trim();
+            renderConversations();
+        });
+
+        // ── Logout ──
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            NChat.Admin.stopGlobalPolling();
+            NChat.Admin.stopConversationPolling();
+            NChat.Admin.clearToken();
+            window.location.href = 'admin-login.html';
+        });
+
+        // ── Global Polling (for new conversation updates) ──
+        NChat.Admin.startGlobalPolling((data) => {
+            if (data.total_unread !== undefined) {
+                // Refresh conversation list periodically
+                loadConversations();
+            }
+        });
+
+        // ── Boot ──
+        loadConversations();
+    </script>
+</body>
+</html>

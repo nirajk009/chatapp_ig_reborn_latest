@@ -1,0 +1,23 @@
+# Laravel vendor
+laravel/example-app/vendor/
+laravel/example-app/node_modules/
+laravel/example-app/.env
+laravel/example-app/storage/*.key
+laravel/example-app/storage/framework/cache/data/*
+laravel/example-app/storage/framework/sessions/*
+laravel/example-app/storage/framework/views/*
+laravel/example-app/storage/logs/*
+laravel/example-app/bootstrap/cache/*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Misc
+h.txt

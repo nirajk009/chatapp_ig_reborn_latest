@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>n-chat</title>
+    <meta name="description" content="Chat with me directly – powered by n-chat" />
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+    <style>
+        :root {
+            --primary: #952cb1;
+            --primary-dim: #871ba4;
+            --primary-container: #f1a6ff;
+            --on-primary: #fff7fb;
+            --on-primary-container: #680082;
+            --secondary-container: #fed6ff;
+            --on-secondary-container: #7d308d;
+            --surface: #fff7fb;
+            --surface-container-low: #ffeffc;
+            --surface-container-high: #fedeff;
+            --surface-container-highest: #fdd6ff;
+            --on-surface: #45274b;
+            --on-surface-variant: #75547a;
+            --outline: #926f97;
+            --outline-variant: #cca5d0;
+            --error: #ac3149;
+            --green: #4ade80;
+            --font: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+        html { font-size: 16px; -webkit-font-smoothing: antialiased; }
+        body {
+            font-family: var(--font);
+            background: var(--surface);
+            color: var(--on-surface);
+            min-height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+        ::selection { background: var(--primary-container); color: var(--on-primary-container); }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        ::-webkit-scrollbar { display: none; }
+        * { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Ambient BG */
+        .bg-glow { position: fixed; border-radius: 50%; pointer-events: none; z-index: 0; opacity: 0.2; }
+        .bg-glow--1 { top: 20%; left: -5rem; width: 20rem; height: 20rem; background: rgba(149,44,177,0.2); filter: blur(100px); }
+        .bg-glow--2 { bottom: 10%; right: -5rem; width: 16rem; height: 16rem; background: rgba(172,45,94,0.2); filter: blur(80px); }
+
+        /* ── Header ── */
+        .chat-header {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0 1.25rem; height: 4rem;
+            background: rgba(255,247,251,0.85); backdrop-filter: blur(16px);
+            box-shadow: 0 1px 12px rgba(69,39,75,0.05);
+        }
+        .header-user { display: flex; align-items: center; gap: 0.75rem; }
+        .header-avatar {
+            width: 2.5rem; height: 2.5rem; border-radius: 0.75rem; overflow: hidden;
+            background: linear-gradient(135deg, var(--primary), var(--primary-container));
+            display: flex; align-items: center; justify-content: center;
+            color: var(--on-primary); font-weight: 800; font-size: 1rem;
+        }
+        .header-avatar img { width: 100%; height: 100%; object-fit: cover; }
+        .header-info { display: flex; flex-direction: column; }
+        .header-name { font-weight: 700; font-size: 1rem; color: var(--on-surface); line-height: 1.2; }
+        .header-status {
+            font-size: 0.625rem; font-weight: 600; letter-spacing: 0.05em;
+            text-transform: uppercase; color: var(--on-surface-variant);
+            display: flex; align-items: center; gap: 0.3rem;
+        }
+        .header-status.online { color: var(--primary); }
+        .status-dot {
+            width: 0.4rem; height: 0.4rem; border-radius: 50%; background: var(--outline-variant);
+        }
+        .status-dot.online { background: var(--green); animation: pulse 2s ease-in-out infinite; }
+        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+        .header-brand {
+            font-size: 0.7rem; font-weight: 700; color: var(--outline-variant);
+            letter-spacing: 0.1em; text-transform: uppercase;
+        }
+
+        /* ── Chat Canvas ── */
+        .chat-canvas {
+            flex: 1; overflow-y: auto; padding: 5rem 1rem 1rem; /* extra bottom will be added for input+popup */
+            max-width: 720px; margin: 0 auto; width: 100%;
+            display: flex; flex-direction: column; gap: 1.25rem;
+            position: relative; z-index: 1;
+        }
+
+        /* Welcome message */
+        .welcome-card {
+            text-align: center; padding: 2rem 1.5rem; margin: 1rem 0;
+            animation: fadeInUp 0.5s ease-out;
+        }
+        .welcome-card__icon { font-size: 3rem; color: var(--primary); margin-bottom: 0.75rem; }
+        .welcome-card__title {
+            font-size: 1.5rem; font-weight: 800; color: var(--on-surface);
+            margin-bottom: 0.35rem;
+        }
+        .welcome-card__sub { color: var(--on-surface-variant); font-size: 0.9rem; }
+
+        @keyframes fadeInUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+
+        /* Day divider */
+        .day-divider { display: flex; justify-content: center; margin: 0.5rem 0; }
+        .day-divider span {
+            background: var(--surface-container-low); padding: 0.3rem 0.9rem;
+            border-radius: 999px; font-size: 0.625rem; font-weight: 700;
+            letter-spacing: 0.12em; text-transform: uppercase; color: var(--on-surface-variant);
+        }
+
+        /* Message groups */
+        .msg-group {
+            display: flex; flex-direction: column; gap: 0.4rem; max-width: 85%;
+            animation: msgIn 0.25s ease-out;
+        }
+        @keyframes msgIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+        .msg-group--received { align-items: flex-start; align-self: flex-start; }
+        .msg-group--sent { align-items: flex-end; align-self: flex-end; }
+
+        .bubble {
+            padding: 0.75rem 1.1rem; font-size: 0.9375rem; line-height: 1.55;
+            word-break: break-word;
+        }
+        .bubble--received {
+            background: var(--surface-container-highest); color: var(--on-surface);
+            border-radius: 1.25rem; border-bottom-left-radius: 0.35rem;
+        }
+        .bubble--sent {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dim));
+            color: var(--on-primary); border-radius: 1.25rem; border-bottom-right-radius: 0.35rem;
+            box-shadow: 0 3px 12px rgba(149,44,177,0.12);
+        }
+
+        .timestamp {
+            font-size: 0.6rem; font-weight: 500; color: rgba(117,84,122,0.55); margin-top: 0.1rem;
+        }
+        .msg-group--received .timestamp { margin-left: 0.2rem; }
+        .msg-group--sent .timestamp { margin-right: 0.2rem; }
+
+        /* Typing indicator */
+        .typing { display: none; align-items: center; gap: 0.3rem; padding: 0.75rem 1.1rem;
+            background: var(--surface-container-highest); border-radius: 1.25rem; border-bottom-left-radius: 0.35rem;
+            align-self: flex-start; max-width: 85%;
+        }
+        .typing.show { display: flex; }
+        .typing-dot {
+            width: 0.35rem; height: 0.35rem; border-radius: 50%; background: var(--on-surface-variant);
+            animation: bounce 1.4s ease-in-out infinite;
+        }
+        .typing-dot:nth-child(2) { animation-delay: 0.15s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.3s; }
+        @keyframes bounce { 0%,60%,100% { transform:translateY(0); opacity:0.3; } 30% { transform:translateY(-4px); opacity:1; } }
+
+        /* ── Save Chat Popup ── */
+        .save-popup {
+            position: fixed; bottom: 4.5rem; left: 0; right: 0; z-index: 45;
+            padding: 0 0.75rem;
+            display: none;
+        }
+        .save-popup.show { display: block; animation: slideUp 0.3s ease-out; }
+        @keyframes slideUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+
+        .save-popup__card {
+            max-width: 720px; margin: 0 auto;
+            background: rgba(255,247,251,0.95); backdrop-filter: blur(20px);
+            border-radius: 1.25rem; padding: 1rem 1.25rem;
+            box-shadow: 0 -4px 24px rgba(69,39,75,0.08);
+            border: 1px solid rgba(204,165,208,0.15);
+        }
+        .save-popup__header {
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;
+        }
+        .save-popup__title { font-size: 0.8rem; font-weight: 700; color: var(--on-surface); }
+        .save-popup__close {
+            background: none; border: none; cursor: pointer; color: var(--on-surface-variant);
+            padding: 0.25rem; display: flex; border-radius: 50%; transition: all 0.2s;
+        }
+        .save-popup__close:hover { background: var(--surface-container-high); }
+        .save-popup__close .material-symbols-outlined { font-size: 1.1rem; }
+        .save-popup__desc { font-size: 0.75rem; color: var(--on-surface-variant); margin-bottom: 0.75rem; }
+
+        .save-popup__form { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+        .save-popup__input {
+            flex: 1; min-width: 120px; background: var(--surface-container-high); border: none;
+            border-radius: 999px; padding: 0.6rem 1rem; font-family: var(--font);
+            font-size: 0.8rem; color: var(--on-surface); outline: none;
+            transition: box-shadow 0.2s;
+        }
+        .save-popup__input::placeholder { color: var(--outline); }
+        .save-popup__input:focus { box-shadow: 0 0 0 2px rgba(149,44,177,0.15); }
+        .save-popup__btn {
+            background: linear-gradient(135deg, var(--primary), var(--primary-container));
+            color: var(--on-primary); border: none; border-radius: 999px;
+            padding: 0.6rem 1.25rem; font-family: var(--font); font-size: 0.8rem;
+            font-weight: 700; cursor: pointer; transition: all 0.2s; white-space: nowrap;
+        }
+        .save-popup__btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(149,44,177,0.25); }
+        .save-popup__btn:active { transform: scale(0.97); }
+        .save-popup__success { display: none; text-align: center; padding: 0.5rem; font-size: 0.8rem; color: var(--primary); font-weight: 600; }
+
+        /* ── Bottom Input ── */
+        .input-bar {
+            position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
+            padding: 0.5rem 0.75rem 0.75rem;
+            background: rgba(255,247,251,0.92); backdrop-filter: blur(20px);
+        }
+        .input-bar__inner {
+            max-width: 720px; margin: 0 auto;
+            display: flex; align-items: center; gap: 0.4rem;
+            background: var(--surface-container-high); border-radius: 999px;
+            padding: 0.3rem 0.3rem 0.3rem 0.75rem;
+            box-shadow: 0 2px 10px rgba(69,39,75,0.04);
+        }
+        .input-bar__field {
+            flex: 1; background: transparent; border: none; color: var(--on-surface);
+            font-family: var(--font); font-size: 0.9rem; outline: none; min-width: 0;
+        }
+        .input-bar__field::placeholder { color: rgba(117,84,122,0.5); }
+        .input-bar__btn {
+            background: none; border: none; color: var(--on-surface-variant); cursor: pointer;
+            padding: 0.4rem; display: flex; align-items: center; border-radius: 50%;
+            transition: color 0.2s; flex-shrink: 0;
+        }
+        .input-bar__btn:hover { color: var(--primary); }
+        .send-btn {
+            width: 2.5rem; height: 2.5rem; border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary), var(--primary-container));
+            color: var(--on-primary); border: none; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 3px 12px rgba(149,44,177,0.2); transition: all 0.2s; flex-shrink: 0;
+        }
+        .send-btn:hover { transform: scale(1.05); box-shadow: 0 5px 16px rgba(149,44,177,0.3); }
+        .send-btn:active { transform: scale(0.92); }
+        .send-btn .material-symbols-outlined { font-variation-settings: 'FILL' 1; font-size: 1.15rem; }
+
+        /* ── Loading State ── */
+        .loading-screen {
+            position: fixed; inset: 0; z-index: 100; background: var(--surface);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            gap: 1rem;
+        }
+        .loading-screen.hidden { display: none; }
+        .loading-spinner {
+            width: 2rem; height: 2rem; border: 3px solid var(--surface-container-highest);
+            border-top-color: var(--primary); border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text { font-size: 0.8rem; color: var(--on-surface-variant); font-weight: 500; }
+
+        /* ── Empty State ── */
+        .empty-state { text-align: center; padding: 3rem 1rem; }
+        .empty-state .material-symbols-outlined { font-size: 3rem; color: var(--primary-container); }
+        .empty-state p { margin-top: 0.5rem; color: var(--on-surface-variant); font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+    <!-- Ambient BG -->
+    <div class="bg-glow bg-glow--1"></div>
+    <div class="bg-glow bg-glow--2"></div>
+
+    <!-- Loading -->
+    <div class="loading-screen" id="loadingScreen">
+        <div class="loading-spinner"></div>
+        <span class="loading-text">Connecting...</span>
+    </div>
+
+    <!-- Header -->
+    <header class="chat-header">
+        <div class="header-user">
+            <div class="header-avatar" id="adminAvatar">N</div>
+            <div class="header-info">
+                <span class="header-name" id="adminName">Loading...</span>
+                <span class="header-status" id="adminStatus">
+                    <span class="status-dot" id="statusDot"></span>
+                    <span id="statusText">connecting</span>
+                </span>
+            </div>
+        </div>
+        <span class="header-brand">n-chat</span>
+    </header>
+
+    <!-- Chat Canvas -->
+    <main class="chat-canvas" id="chatCanvas">
+        <!-- Welcome card (shown when no messages) -->
+        <div class="welcome-card" id="welcomeCard" style="display:none;">
+            <div class="welcome-card__icon">
+                <span class="material-symbols-outlined" style="font-size:3rem;">waving_hand</span>
+            </div>
+            <h2 class="welcome-card__title">Hey there! 👋</h2>
+            <p class="welcome-card__sub">Send me a message and I'll get back to you soon.</p>
+        </div>
+    </main>
+
+    <!-- Save Chat Popup -->
+    <div class="save-popup" id="savePopup">
+        <div class="save-popup__card">
+            <div class="save-popup__header">
+                <span class="save-popup__title">💬 Save your chat</span>
+                <button class="save-popup__close" id="closePopup">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <p class="save-popup__desc">Enter your name & email so we can continue the conversation later.</p>
+            <div class="save-popup__form" id="saveForm">
+                <input class="save-popup__input" id="saveName" type="text" placeholder="Your name" />
+                <input class="save-popup__input" id="saveEmail" type="email" placeholder="Your email" />
+                <button class="save-popup__btn" id="saveBtn">Save</button>
+            </div>
+            <div class="save-popup__success" id="saveSuccess">✓ Saved! We'll keep your chat safe.</div>
+        </div>
+    </div>
+
+    <!-- Input Bar -->
+    <div class="input-bar">
+        <div class="input-bar__inner">
+            <input class="input-bar__field" id="messageInput" type="text" placeholder="Write a message..." autocomplete="off" />
+            <button class="input-bar__btn" aria-label="Emoji">
+                <span class="material-symbols-outlined">mood</span>
+            </button>
+            <button class="send-btn" id="sendBtn" aria-label="Send">
+                <span class="material-symbols-outlined">send</span>
+            </button>
+        </div>
+    </div>
+
+    <script src="api.js"></script>
+    <script>
+        // ── State ──
+        let adminInfo = null;
+        let visitorInfo = null;
+        let hasShownPopup = false;
+        let messageCount = 0;
+
+        // ── DOM Refs ──
+        const chatCanvas = document.getElementById('chatCanvas');
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const loadingScreen = document.getElementById('loadingScreen');
+        const welcomeCard = document.getElementById('welcomeCard');
+        const savePopup = document.getElementById('savePopup');
+        const adminNameEl = document.getElementById('adminName');
+        const adminAvatarEl = document.getElementById('adminAvatar');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+
+        // ── Init ──
+        async function init() {
+            try {
+                const data = await NChat.Visitor.init();
+                visitorInfo = data.visitor;
+                adminInfo = data.admin;
+
+                if (adminInfo) {
+                    adminNameEl.textContent = adminInfo.name;
+                    if (adminInfo.avatar_url) {
+                        adminAvatarEl.innerHTML = `<img src="${adminInfo.avatar_url}" alt="${adminInfo.name}" />`;
+                    } else {
+                        adminAvatarEl.textContent = adminInfo.name.charAt(0).toUpperCase();
+                    }
+                }
+
+                // Load existing messages
+                const msgData = await NChat.Visitor.getMessages();
+                if (msgData.messages.length === 0) {
+                    welcomeCard.style.display = '';
+                } else {
+                    welcomeCard.style.display = 'none';
+                    addDayDivider('Today');
+                    msgData.messages.forEach(m => appendMessage(m, false));
+                    messageCount = msgData.messages.length;
+                }
+
+                scrollToBottom();
+                loadingScreen.classList.add('hidden');
+
+                // Start polling
+                NChat.Visitor.startPolling(onNewMessages);
+
+                // Show save popup after 2nd message if info not saved
+                checkSavePopup();
+
+            } catch (err) {
+                console.error('Init error:', err);
+                loadingScreen.querySelector('.loading-text').textContent = 'Connection error. Retrying...';
+                setTimeout(init, 2000);
+            }
+        }
+
+        // ── Polling Callback ──
+        function onNewMessages(messages, adminOnline) {
+            // Update admin status
+            if (adminOnline) {
+                statusDot.classList.add('online');
+                statusText.textContent = 'online';
+                document.querySelector('.header-status').classList.add('online');
+            } else {
+                statusDot.classList.remove('online');
+                statusText.textContent = 'offline';
+                document.querySelector('.header-status').classList.remove('online');
+            }
+
+            // Filter to only admin messages (we already have our own)
+            const adminMsgs = messages.filter(m => m.sender_type === 'admin');
+            if (adminMsgs.length > 0) {
+                adminMsgs.forEach(m => appendMessage(m, true));
+                scrollToBottom();
+            }
+        }
+
+        // ── Send Message ──
+        async function sendMessage() {
+            const text = messageInput.value.trim();
+            if (!text) return;
+
+            messageInput.value = '';
+            welcomeCard.style.display = 'none';
+
+            // Optimistic append
+            const tempMsg = {
+                id: Date.now(),
+                sender_type: 'visitor',
+                body: text,
+                time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+            };
+            appendMessage(tempMsg, true);
+            scrollToBottom();
+
+            try {
+                await NChat.Visitor.sendMessage(text);
+                messageCount++;
+                checkSavePopup();
+            } catch (err) {
+                console.error('Send error:', err);
+            }
+        }
+
+        sendBtn.addEventListener('click', sendMessage);
+        messageInput.addEventListener('keydown', e => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // ── Append Message to DOM ──
+        function appendMessage(msg, animate) {
+            const group = document.createElement('div');
+            group.className = `msg-group msg-group--${msg.sender_type === 'visitor' ? 'sent' : 'received'}`;
+            if (!animate) group.style.animation = 'none';
+
+            const bubble = document.createElement('div');
+            bubble.className = `bubble bubble--${msg.sender_type === 'visitor' ? 'sent' : 'received'}`;
+            bubble.textContent = msg.body;
+
+            const ts = document.createElement('span');
+            ts.className = 'timestamp';
+            ts.textContent = msg.time;
+
+            group.appendChild(bubble);
+            group.appendChild(ts);
+            chatCanvas.appendChild(group);
+        }
+
+        function addDayDivider(label) {
+            const div = document.createElement('div');
+            div.className = 'day-divider';
+            div.innerHTML = `<span>${label}</span>`;
+            chatCanvas.appendChild(div);
+        }
+
+        function scrollToBottom() {
+            requestAnimationFrame(() => {
+                chatCanvas.scrollTop = chatCanvas.scrollHeight;
+                window.scrollTo(0, document.body.scrollHeight);
+            });
+        }
+
+        // ── Save Chat Popup Logic ──
+        function checkSavePopup() {
+            if (hasShownPopup) return;
+            if (visitorInfo && (visitorInfo.name || visitorInfo.email)) return; // already saved
+            if (messageCount >= 2) {
+                hasShownPopup = true;
+                setTimeout(() => {
+                    savePopup.classList.add('show');
+                    adjustCanvasPadding();
+                }, 500);
+            }
+        }
+
+        document.getElementById('closePopup').addEventListener('click', () => {
+            savePopup.classList.remove('show');
+            adjustCanvasPadding();
+        });
+
+        document.getElementById('saveBtn').addEventListener('click', async () => {
+            const name = document.getElementById('saveName').value.trim();
+            const email = document.getElementById('saveEmail').value.trim();
+            if (!name && !email) return;
+
+            try {
+                await NChat.Visitor.saveInfo(name, email);
+                document.getElementById('saveForm').style.display = 'none';
+                document.getElementById('saveSuccess').style.display = 'block';
+                setTimeout(() => {
+                    savePopup.classList.remove('show');
+                    adjustCanvasPadding();
+                }, 2000);
+            } catch (err) {
+                console.error('Save error:', err);
+            }
+        });
+
+        function adjustCanvasPadding() {
+            const popupVisible = savePopup.classList.contains('show');
+            chatCanvas.style.paddingBottom = popupVisible ? '12rem' : '5rem';
+        }
+
+        // ── Boot ──
+        adjustCanvasPadding();
+        init();
+    </script>
+</body>
+</html>

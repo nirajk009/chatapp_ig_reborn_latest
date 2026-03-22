@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>n-chat | Admin Login</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+    <style>
+        :root {
+            --primary: #952cb1; --primary-dim: #871ba4; --primary-container: #f1a6ff;
+            --on-primary: #fff7fb; --on-primary-container: #680082;
+            --secondary-container: #fed6ff;
+            --surface: #fff7fb; --surface-container-low: #ffeffc;
+            --surface-container-high: #fedeff; --on-surface: #45274b;
+            --on-surface-variant: #75547a; --outline-variant: #cca5d0;
+            --error: #ac3149;
+            --font: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: var(--font); background: var(--surface); color: var(--on-surface);
+            min-height: 100dvh; display: flex; flex-direction: column; overflow-x: hidden;
+        }
+        ::selection { background: var(--primary-container); color: var(--on-primary-container); }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+
+        .bg-blob { position: fixed; border-radius: 50%; pointer-events: none; z-index: 0; }
+        .bg-blob--1 { top: -10%; right: -10%; width: 40rem; height: 40rem; background: rgba(254,214,255,0.3); filter: blur(120px); }
+        .bg-blob--2 { bottom: -10%; left: -10%; width: 35rem; height: 35rem; background: rgba(241,166,255,0.2); filter: blur(100px); }
+
+        .login-main { flex:1; display: flex; align-items: center; justify-content: center; padding: 2rem 1.5rem; position: relative; z-index: 1; }
+        .login-card { width: 100%; max-width: 400px; animation: fadeIn 0.5s ease-out; }
+        @keyframes fadeIn { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+
+        .brand { text-align: center; margin-bottom: 2.5rem; }
+        .brand-icon .material-symbols-outlined { font-size: 2.75rem; color: var(--primary); }
+        .brand-name { font-size: 3rem; font-weight: 900; letter-spacing: -0.04em; color: var(--primary); margin: 0.25rem 0; }
+        .brand-tag { color: var(--on-surface-variant); font-weight: 500; font-size: 0.9rem; }
+        .brand-badge {
+            display: inline-block; margin-top: 0.75rem;
+            background: var(--surface-container-high); color: var(--on-surface-variant);
+            font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;
+            padding: 0.35rem 0.9rem; border-radius: 999px;
+        }
+
+        .form { display: flex; flex-direction: column; gap: 1.25rem; }
+        .input-group { display: flex; flex-direction: column; gap: 0.4rem; }
+        .input-label { font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--on-surface-variant); padding-left: 1.25rem; }
+        .input-wrap { position: relative; }
+        .input-field {
+            width: 100%; background: var(--surface-container-low); border: 1.5px solid rgba(204,165,208,0.15);
+            color: var(--on-surface); padding: 0.9rem 3rem 0.9rem 1.25rem; border-radius: 999px;
+            font-family: var(--font); font-size: 0.9rem; outline: none; transition: all 0.3s;
+        }
+        .input-field::placeholder { color: rgba(117,84,122,0.5); }
+        .input-field:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(149,44,177,0.12); }
+        .input-icon {
+            position: absolute; right: 1.25rem; top: 50%; transform: translateY(-50%);
+            color: rgba(117,84,122,0.4); font-size: 1.15rem; transition: color 0.3s; pointer-events: none;
+        }
+        .input-field:focus ~ .input-icon { color: var(--primary); }
+
+        .btn-submit {
+            display: block; width: 100%; padding: 0.9rem; border: none; border-radius: 999px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-container));
+            color: var(--on-primary); font-family: var(--font); font-size: 1rem; font-weight: 700;
+            cursor: pointer; box-shadow: 0 10px 30px rgba(149,44,177,0.2); transition: all 0.3s;
+            margin-top: 0.5rem; position: relative; overflow: hidden;
+        }
+        .btn-submit:hover { box-shadow: 0 15px 40px rgba(149,44,177,0.3); transform: translateY(-2px); }
+        .btn-submit:active { transform: scale(0.98); }
+        .btn-submit--loading { pointer-events: none; opacity: 0.8; }
+        .btn-submit--loading .btn-text { visibility: hidden; }
+        .btn-submit--loading::after {
+            content: ''; position: absolute; width: 1.2rem; height: 1.2rem;
+            border: 2.5px solid rgba(255,247,251,0.3); border-top-color: var(--on-primary);
+            border-radius: 50%; animation: spin 0.6s linear infinite;
+            left: 50%; top: 50%; margin: -0.6rem 0 0 -0.6rem;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .error-msg {
+            text-align: center; color: var(--error); font-size: 0.8rem; font-weight: 600;
+            padding: 0.5rem 1rem; background: rgba(172,49,73,0.08); border-radius: 0.75rem;
+            display: none;
+        }
+        .error-msg.show { display: block; animation: shake 0.4s ease-out; }
+        @keyframes shake { 0%,100% { transform:translateX(0); } 25% { transform:translateX(-6px); } 75% { transform:translateX(6px); } }
+
+        .footer { padding: 1.5rem; text-align: center; z-index: 1; position: relative; }
+        .footer p { font-size: 0.6875rem; font-weight: 700; color: rgba(117,84,122,0.35); letter-spacing: 0.2em; text-transform: uppercase; }
+    </style>
+</head>
+<body>
+    <div class="bg-blob bg-blob--1"></div>
+    <div class="bg-blob bg-blob--2"></div>
+
+    <main class="login-main">
+        <div class="login-card">
+            <div class="brand">
+                <div class="brand-icon"><span class="material-symbols-outlined">bubble_chart</span></div>
+                <h1 class="brand-name">n-chat</h1>
+                <p class="brand-tag">Enter the pulse of conversation.</p>
+                <span class="brand-badge">🔒 Admin Panel</span>
+            </div>
+
+            <div class="error-msg" id="errorMsg">Invalid email or password</div>
+
+            <form class="form" id="loginForm">
+                <div class="input-group">
+                    <label class="input-label" for="email">Email Address</label>
+                    <div class="input-wrap">
+                        <input class="input-field" id="email" type="email" placeholder="admin@nchat.io" autocomplete="email" required />
+                        <span class="material-symbols-outlined input-icon">alternate_email</span>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label class="input-label" for="password">Password</label>
+                    <div class="input-wrap">
+                        <input class="input-field" id="password" type="password" placeholder="••••••••" autocomplete="current-password" required />
+                        <span class="material-symbols-outlined input-icon">lock</span>
+                    </div>
+                </div>
+                <button class="btn-submit" type="submit" id="submitBtn">
+                    <span class="btn-text">Login</span>
+                </button>
+            </form>
+        </div>
+    </main>
+
+    <footer class="footer"><p>© 2024 Velvet Pulse Systems</p></footer>
+
+    <script src="api.js"></script>
+    <script>
+        // If already logged in, redirect
+        if (NChat.Admin.isLoggedIn()) {
+            window.location.href = 'admin.html';
+        }
+
+        const form = document.getElementById('loginForm');
+        const btn = document.getElementById('submitBtn');
+        const errorMsg = document.getElementById('errorMsg');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            errorMsg.classList.remove('show');
+
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            btn.classList.add('btn-submit--loading');
+
+            try {
+                await NChat.Admin.login(email, password);
+                window.location.href = 'admin.html';
+            } catch (err) {
+                errorMsg.textContent = err.error || 'Invalid email or password';
+                errorMsg.classList.add('show');
+                btn.classList.remove('btn-submit--loading');
+            }
+        });
+    </script>
+</body>
+</html>

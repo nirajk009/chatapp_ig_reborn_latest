@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>n-chat | Login</title>
+    <meta name="description" content="Login to n-chat - Enter the pulse of conversation." />
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+    <style>
+        /* ========================================
+           DESIGN SYSTEM: VELVET PULSE – LOGIN
+           ======================================== */
+
+        /* --- CSS Custom Properties --- */
+        :root {
+            --primary: #952cb1;
+            --primary-dim: #871ba4;
+            --primary-container: #f1a6ff;
+            --on-primary: #fff7fb;
+            --on-primary-container: #680082;
+            --secondary: #8c3e9b;
+            --secondary-container: #fed6ff;
+            --on-secondary-container: #7d308d;
+            --surface: #fff7fb;
+            --surface-container-low: #ffeffc;
+            --surface-container-high: #fedeff;
+            --surface-container-highest: #fdd6ff;
+            --on-surface: #45274b;
+            --on-surface-variant: #75547a;
+            --on-background: #45274b;
+            --outline: #926f97;
+            --outline-variant: #cca5d0;
+            --error: #ac3149;
+            --font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            --radius-full: 9999px;
+            --radius-lg: 2rem;
+            --radius-md: 1rem;
+            --shadow-primary: rgba(149, 44, 177, 0.2);
+            --shadow-ambient: rgba(69, 39, 75, 0.04);
+        }
+
+        /* --- Reset & Base --- */
+        *, *::before, *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            font-size: 16px;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background-color: var(--surface);
+            color: var(--on-surface);
+            min-height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        ::selection {
+            background: var(--primary-container);
+            color: var(--on-primary-container);
+        }
+
+        /* --- Background Decorative Blobs --- */
+        .bg-blob {
+            position: fixed;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .bg-blob--top {
+            top: -10%;
+            right: -10%;
+            width: 40rem;
+            height: 40rem;
+            background: rgba(254, 214, 255, 0.3);
+            filter: blur(120px);
+            animation: pulseBlob 8s ease-in-out infinite alternate;
+        }
+
+        .bg-blob--bottom {
+            bottom: -10%;
+            left: -10%;
+            width: 35rem;
+            height: 35rem;
+            background: rgba(241, 166, 255, 0.2);
+            filter: blur(100px);
+            animation: pulseBlob 10s ease-in-out infinite alternate-reverse;
+        }
+
+        @keyframes pulseBlob {
+            0% { transform: scale(1); opacity: 0.7; }
+            100% { transform: scale(1.1); opacity: 1; }
+        }
+
+        /* --- Main Content Area --- */
+        .login-main {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 3rem 1.5rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .login-card {
+            width: 100%;
+            max-width: 420px;
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(24px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* --- Brand Section --- */
+        .brand {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .brand__icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1rem;
+        }
+
+        .brand__icon .material-symbols-outlined {
+            font-size: 3rem;
+            color: var(--primary);
+        }
+
+        .brand__name {
+            font-size: 3.5rem;
+            font-weight: 900;
+            letter-spacing: -0.04em;
+            color: var(--primary);
+            margin-bottom: 0.5rem;
+            line-height: 1;
+        }
+
+        .brand__tagline {
+            color: var(--on-surface-variant);
+            font-weight: 500;
+            letter-spacing: 0.02em;
+            font-size: 0.95rem;
+        }
+
+        /* --- Form --- */
+        .form {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .input-group__label-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 1.5rem;
+        }
+
+        .input-group__label {
+            font-size: 0.6875rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--on-surface-variant);
+        }
+
+        .input-group__link {
+            font-size: 0.6875rem;
+            font-weight: 700;
+            color: var(--primary);
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+
+        .input-group__link:hover {
+            color: var(--primary-dim);
+        }
+
+        .input-wrapper {
+            position: relative;
+        }
+
+        .input-wrapper__field {
+            width: 100%;
+            background: var(--surface-container-low);
+            border: 1.5px solid rgba(204, 165, 208, 0.15);
+            color: var(--on-surface);
+            padding: 1rem 3.5rem 1rem 1.5rem;
+            border-radius: var(--radius-full);
+            font-family: var(--font-family);
+            font-size: 0.95rem;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        .input-wrapper__field::placeholder {
+            color: rgba(117, 84, 122, 0.5);
+        }
+
+        .input-wrapper__field:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(149, 44, 177, 0.12);
+            background: var(--surface);
+        }
+
+        .input-wrapper__icon {
+            position: absolute;
+            right: 1.5rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: rgba(117, 84, 122, 0.4);
+            transition: color 0.3s ease;
+            font-size: 1.25rem;
+        }
+
+        .input-wrapper__field:focus + .input-wrapper__icon {
+            color: var(--primary);
+        }
+
+        /* --- Password Toggle --- */
+        .password-toggle {
+            background: none;
+            border: none;
+            cursor: pointer;
+            position: absolute;
+            right: 1.5rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: rgba(117, 84, 122, 0.4);
+            transition: color 0.3s ease;
+            display: flex;
+            align-items: center;
+        }
+
+        .password-toggle:hover {
+            color: var(--primary);
+        }
+
+        .password-toggle .material-symbols-outlined {
+            font-size: 1.25rem;
+        }
+
+        /* --- Gradient Button --- */
+        .btn-primary {
+            display: block;
+            width: 100%;
+            padding: 1rem 1.5rem;
+            border: none;
+            border-radius: var(--radius-full);
+            background: linear-gradient(135deg, var(--primary), var(--primary-container));
+            color: var(--on-primary);
+            font-family: var(--font-family);
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 10px 30px var(--shadow-primary);
+            transition: all 0.3s ease;
+            margin-top: 0.5rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-primary::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+            transition: left 0.5s ease;
+        }
+
+        .btn-primary:hover {
+            box-shadow: 0 15px 40px rgba(149, 44, 177, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .btn-primary:hover::before {
+            left: 100%;
+        }
+
+        .btn-primary:active {
+            transform: scale(0.98) translateY(0);
+            box-shadow: 0 5px 20px var(--shadow-primary);
+        }
+
+        /* --- Divider --- */
+        .divider {
+            position: relative;
+            text-align: center;
+            margin: 2.5rem 0;
+        }
+
+        .divider::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: rgba(204, 165, 208, 0.15);
+        }
+
+        .divider__text {
+            position: relative;
+            display: inline-block;
+            background: var(--surface);
+            padding: 0 1rem;
+            font-size: 0.6875rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            color: var(--on-surface-variant);
+        }
+
+        /* --- Social Buttons --- */
+        .social-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .social-btn {
+            width: 3rem;
+            height: 3rem;
+            border-radius: 50%;
+            background: var(--surface-container-high);
+            border: 1.5px solid rgba(204, 165, 208, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--on-surface);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .social-btn .material-symbols-outlined {
+            font-size: 1.25rem;
+        }
+
+        .social-btn:hover {
+            background: var(--surface-container-highest);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px var(--shadow-ambient);
+        }
+
+        .social-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* Google & Apple specific styling */
+        .social-btn--google {
+            position: relative;
+        }
+
+        .social-btn--google::before {
+            content: 'G';
+            font-family: var(--font-family);
+            font-weight: 800;
+            font-size: 1.2rem;
+            color: var(--primary);
+        }
+
+        .social-btn--google .material-symbols-outlined {
+            display: none;
+        }
+
+        .social-btn--apple::before {
+            content: '';
+            font-family: var(--font-family);
+            font-weight: 800;
+            font-size: 1.4rem;
+        }
+
+        /* --- Footer Text --- */
+        .footer-text {
+            text-align: center;
+            color: var(--on-surface-variant);
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        .footer-text a {
+            color: var(--primary);
+            font-weight: 700;
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+
+        .footer-text a:hover {
+            text-decoration: underline;
+            text-decoration-thickness: 2px;
+            text-underline-offset: 4px;
+        }
+
+        /* --- Copyright Footer --- */
+        .copyright {
+            padding: 2rem 1.5rem;
+            text-align: center;
+            position: relative;
+            z-index: 1;
+        }
+
+        .copyright__text {
+            font-size: 0.6875rem;
+            font-weight: 700;
+            color: rgba(117, 84, 122, 0.4);
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+        }
+
+        /* --- Error State --- */
+        .input-wrapper--error .input-wrapper__field {
+            border-color: var(--error);
+            box-shadow: 0 0 0 3px rgba(172, 49, 73, 0.1);
+        }
+
+        .input-error-msg {
+            font-size: 0.75rem;
+            color: var(--error);
+            padding-left: 1.5rem;
+            margin-top: 0.25rem;
+            display: none;
+        }
+
+        .input-wrapper--error ~ .input-error-msg {
+            display: block;
+        }
+
+        /* --- Loading State Button --- */
+        .btn-primary--loading {
+            pointer-events: none;
+            opacity: 0.85;
+        }
+
+        .btn-primary--loading .btn-primary__text {
+            visibility: hidden;
+        }
+
+        .btn-primary--loading::after {
+            content: '';
+            position: absolute;
+            width: 1.25rem;
+            height: 1.25rem;
+            border: 2.5px solid rgba(255, 247, 251, 0.3);
+            border-top-color: var(--on-primary);
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            left: 50%;
+            top: 50%;
+            margin-left: -0.625rem;
+            margin-top: -0.625rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* --- Responsive --- */
+        @media (max-width: 480px) {
+            .brand__name {
+                font-size: 2.75rem;
+            }
+
+            .login-main {
+                padding: 2rem 1.25rem;
+            }
+        }
+
+        /* --- Material Symbols Config --- */
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body>
+    <!-- Background Decorative Blobs -->
+    <div class="bg-blob bg-blob--top"></div>
+    <div class="bg-blob bg-blob--bottom"></div>
+
+    <!-- Main Content -->
+    <main class="login-main">
+        <div class="login-card">
+            <!-- Brand -->
+            <div class="brand">
+                <div class="brand__icon">
+                    <span class="material-symbols-outlined">bubble_chart</span>
+                </div>
+                <h1 class="brand__name">n-chat</h1>
+                <p class="brand__tagline">Enter the pulse of conversation.</p>
+            </div>
+
+            <!-- Login Form -->
+            <form class="form" id="loginForm" onsubmit="return handleLogin(event)">
+                <!-- Email -->
+                <div class="input-group">
+                    <div class="input-group__label-row">
+                        <label class="input-group__label" for="email">Email Address</label>
+                    </div>
+                    <div class="input-wrapper" id="emailWrapper">
+                        <input
+                            class="input-wrapper__field"
+                            id="email"
+                            type="email"
+                            placeholder="hello@pulse.com"
+                            autocomplete="email"
+                            required
+                        />
+                        <span class="material-symbols-outlined input-wrapper__icon">alternate_email</span>
+                    </div>
+                    <span class="input-error-msg" id="emailError">Please enter a valid email address</span>
+                </div>
+
+                <!-- Password -->
+                <div class="input-group">
+                    <div class="input-group__label-row">
+                        <label class="input-group__label" for="password">Password</label>
+                        <a class="input-group__link" href="#">Forgot?</a>
+                    </div>
+                    <div class="input-wrapper" id="passwordWrapper">
+                        <input
+                            class="input-wrapper__field"
+                            id="password"
+                            type="password"
+                            placeholder="••••••••"
+                            autocomplete="current-password"
+                            required
+                            minlength="6"
+                        />
+                        <button type="button" class="password-toggle" id="togglePassword" aria-label="Toggle password visibility">
+                            <span class="material-symbols-outlined">visibility_off</span>
+                        </button>
+                    </div>
+                    <span class="input-error-msg" id="passwordError">Password must be at least 6 characters</span>
+                </div>
+
+                <!-- Login Button -->
+                <button class="btn-primary" type="submit" id="loginBtn">
+                    <span class="btn-primary__text">Login</span>
+                </button>
+            </form>
+
+            <!-- Divider -->
+            <div class="divider">
+                <span class="divider__text">Or continue with</span>
+            </div>
+
+            <!-- Social Buttons -->
+            <div class="social-buttons">
+                <button class="social-btn social-btn--google" aria-label="Continue with Google"></button>
+                <button class="social-btn social-btn--apple" aria-label="Continue with Apple">
+                    <span class="material-symbols-outlined">cloud_circle</span>
+                </button>
+            </div>
+
+            <!-- Signup Link -->
+            <p class="footer-text">
+                Don't have an account? <a href="signup.html">Signup</a>
+            </p>
+        </div>
+    </main>
+
+    <!-- Copyright -->
+    <footer class="copyright">
+        <p class="copyright__text">© 2024 Velvet Pulse Systems</p>
+    </footer>
+
+    <script>
+        // Password Toggle
+        const toggleBtn = document.getElementById('togglePassword');
+        const passwordInput = document.getElementById('password');
+        toggleBtn.addEventListener('click', () => {
+            const isPassword = passwordInput.type === 'password';
+            passwordInput.type = isPassword ? 'text' : 'password';
+            toggleBtn.querySelector('.material-symbols-outlined').textContent = isPassword ? 'visibility' : 'visibility_off';
+        });
+
+        // Form Validation
+        function handleLogin(e) {
+            e.preventDefault();
+            const email = document.getElementById('email');
+            const password = document.getElementById('password');
+            const emailWrapper = document.getElementById('emailWrapper');
+            const passwordWrapper = document.getElementById('passwordWrapper');
+            let valid = true;
+
+            // Reset
+            emailWrapper.classList.remove('input-wrapper--error');
+            passwordWrapper.classList.remove('input-wrapper--error');
+
+            if (!email.value || !email.validity.valid) {
+                emailWrapper.classList.add('input-wrapper--error');
+                valid = false;
+            }
+            if (!password.value || password.value.length < 6) {
+                passwordWrapper.classList.add('input-wrapper--error');
+                valid = false;
+            }
+
+            if (valid) {
+                const btn = document.getElementById('loginBtn');
+                btn.classList.add('btn-primary--loading');
+                // Simulate login
+                setTimeout(() => {
+                    btn.classList.remove('btn-primary--loading');
+                    window.location.href = 'contacts.html';
+                }, 1500);
+            }
+        }
+    </script>
+</body>
+</html>

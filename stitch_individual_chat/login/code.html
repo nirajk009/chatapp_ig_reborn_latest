@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>n-chat | Login</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-secondary": "#fff7fa",
+              "on-tertiary-fixed-variant": "#81013e",
+              "secondary-dim": "#7e318e",
+              "error-container": "#f76a80",
+              "on-background": "#45274b",
+              "surface-container-lowest": "#ffffff",
+              "primary-fixed-dim": "#ec91ff",
+              "on-tertiary-fixed": "#480020",
+              "on-primary-container": "#680082",
+              "surface-container-high": "#fedeff",
+              "surface": "#fff7fb",
+              "secondary-fixed": "#fed6ff",
+              "surface-container-low": "#ffeffc",
+              "surface-container": "#ffe6fe",
+              "surface-container-highest": "#fdd6ff",
+              "secondary": "#8c3e9b",
+              "on-error-container": "#68001f",
+              "on-surface": "#45274b",
+              "on-secondary-container": "#7d308d",
+              "tertiary": "#ac2d5e",
+              "secondary-fixed-dim": "#fbc2ff",
+              "tertiary-container": "#ff9bb7",
+              "surface-bright": "#fff7fb",
+              "inverse-primary": "#e67aff",
+              "primary-container": "#f1a6ff",
+              "on-secondary-fixed": "#681978",
+              "outline-variant": "#cca5d0",
+              "surface-variant": "#fdd6ff",
+              "on-primary": "#fff7fb",
+              "on-secondary-fixed-variant": "#883a97",
+              "background": "#fff7fb",
+              "primary-dim": "#871ba4",
+              "surface-tint": "#952cb1",
+              "outline": "#926f97",
+              "on-primary-fixed-variant": "#760093",
+              "on-tertiary-container": "#710035",
+              "inverse-on-surface": "#ad96ae",
+              "error": "#ac3149",
+              "on-tertiary": "#fff7f7",
+              "primary": "#952cb1",
+              "tertiary-fixed-dim": "#ff84aa",
+              "secondary-container": "#fed6ff",
+              "tertiary-fixed": "#ff9bb7",
+              "primary-fixed": "#f1a6ff",
+              "on-surface-variant": "#75547a",
+              "inverse-surface": "#17081a",
+              "error-dim": "#770326",
+              "on-error": "#fff7f7",
+              "surface-dim": "#f9cbfd",
+              "on-primary-fixed": "#47005a",
+              "tertiary-dim": "#9c1f52"
+            },
+            fontFamily: {
+              "headline": ["Plus Jakarta Sans"],
+              "body": ["Plus Jakarta Sans"],
+              "label": ["Plus Jakarta Sans"]
+            },
+            borderRadius: {"DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      .gradient-button {
+        background: linear-gradient(45deg, #952cb1, #f1a6ff);
+      }
+      .glass-bg {
+        backdrop-filter: blur(20px);
+        background: rgba(255, 247, 251, 0.7);
+      }
+      body {
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        background-color: #fff7fb;
+        color: #45274b;
+      }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="min-h-screen flex flex-col selection:bg-primary-container selection:text-on-primary-container">
+<!-- Content Area: Center Aligned Shell -->
+<main class="flex-grow flex items-center justify-center px-6 py-12 relative overflow-hidden">
+<!-- Background Decorative Elements (The Pulse) -->
+<div class="absolute top-[-10%] right-[-10%] w-[40rem] h-[40rem] rounded-full bg-secondary-container/30 blur-[120px] pointer-events-none"></div>
+<div class="absolute bottom-[-10%] left-[-10%] w-[35rem] h-[35rem] rounded-full bg-primary-container/20 blur-[100px] pointer-events-none"></div>
+<!-- Login Card Container -->
+<div class="w-full max-w-md z-10">
+<!-- Brand Anchor -->
+<div class="text-center mb-12">
+<div class="inline-flex items-center justify-center mb-4">
+<span class="material-symbols-outlined text-primary text-5xl" data-icon="bubble_chart">bubble_chart</span>
+</div>
+<h1 class="text-6xl font-black tracking-tighter text-primary mb-2">n-chat</h1>
+<p class="text-on-surface-variant font-medium tracking-wide">Enter the pulse of conversation.</p>
+</div>
+<!-- Form Shell -->
+<form action="#" class="space-y-6">
+<!-- Input Group: Email -->
+<div class="space-y-2">
+<label class="block px-6 text-[0.6875rem] font-bold uppercase tracking-[0.1em] text-on-surface-variant">Email Address</label>
+<div class="relative group">
+<input class="w-full bg-surface-container-low border border-outline-variant/15 text-on-surface px-6 py-4 rounded-full focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all placeholder:text-on-surface-variant/50" placeholder="hello@pulse.com" type="email"/>
+<span class="material-symbols-outlined absolute right-6 top-1/2 -translate-y-1/2 text-on-surface-variant/40 group-focus-within:text-primary transition-colors" data-icon="alternate_email">alternate_email</span>
+</div>
+</div>
+<!-- Input Group: Password -->
+<div class="space-y-2">
+<div class="flex justify-between items-center px-6">
+<label class="text-[0.6875rem] font-bold uppercase tracking-[0.1em] text-on-surface-variant">Password</label>
+<a class="text-[0.6875rem] font-bold text-primary hover:text-primary-dim transition-colors" href="#">Forgot?</a>
+</div>
+<div class="relative group">
+<input class="w-full bg-surface-container-low border border-outline-variant/15 text-on-surface px-6 py-4 rounded-full focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all placeholder:text-on-surface-variant/50" placeholder="••••••••" type="password"/>
+<span class="material-symbols-outlined absolute right-6 top-1/2 -translate-y-1/2 text-on-surface-variant/40 group-focus-within:text-primary transition-colors" data-icon="lock_open">lock_open</span>
+</div>
+</div>
+<!-- Primary Action -->
+<div class="pt-4">
+<button class="gradient-button w-full text-on-primary font-bold py-4 px-6 rounded-full shadow-[0_10px_30px_rgba(149,44,177,0.2)] hover:shadow-[0_15px_40px_rgba(149,44,177,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-300" type="submit">
+                        Login
+                    </button>
+</div>
+</form>
+<!-- Secondary Actions -->
+<div class="mt-10 text-center space-y-6">
+<div class="relative py-4">
+<div class="absolute inset-0 flex items-center"><div class="w-full border-t border-outline-variant/15"></div></div>
+<div class="relative flex justify-center text-[0.6875rem] uppercase tracking-widest font-bold text-on-surface-variant"><span class="bg-surface px-4">Or continue with</span></div>
+</div>
+<div class="flex gap-4 justify-center">
+<button class="flex items-center justify-center w-12 h-12 rounded-full bg-surface-container-high border border-outline-variant/10 text-on-surface hover:bg-surface-container-highest transition-colors">
+<span class="material-symbols-outlined" data-icon="brand_awareness">brand_awareness</span>
+</button>
+<button class="flex items-center justify-center w-12 h-12 rounded-full bg-surface-container-high border border-outline-variant/10 text-on-surface hover:bg-surface-container-highest transition-colors">
+<span class="material-symbols-outlined" data-icon="cloud_circle">cloud_circle</span>
+</button>
+</div>
+<p class="text-on-surface-variant font-medium">
+                    Don't have an account? 
+                    <a class="text-primary font-bold hover:underline decoration-2 underline-offset-4" href="#">Signup</a>
+</p>
+</div>
+</div>
+</main>
+<!-- Shared Bottom Nav (Suppressed for transactional screens per mandate, 
+         but technically listed in JSON - however, rules state suppress for Login/Signup. 
+         Following the suppression logic for best UX) -->
+<!-- Footer Branding -->
+<footer class="py-8 px-6 text-center">
+<p class="text-[0.6875rem] font-bold text-on-surface-variant/40 tracking-[0.2em] uppercase">
+            © 2024 Velvet Pulse Systems
+        </p>
+</footer>
+</body></html>
