@@ -83,6 +83,25 @@
             font-size: 0.7rem; font-weight: 700; color: var(--outline-variant);
             letter-spacing: 0.1em; text-transform: uppercase;
         }
+        .header-actions { display: flex; align-items: center; gap: 0.5rem; }
+        .header-actions a {
+            font-family: var(--font); font-size: 0.75rem; font-weight: 700;
+            text-decoration: none; padding: 0.4rem 0.9rem; border-radius: 999px;
+            transition: all 0.2s ease; text-transform: uppercase; letter-spacing: 0.05em;
+        }
+        .header-actions__login {
+            color: var(--primary); background: var(--surface-container-high);
+        }
+        .header-actions__login:hover { background: var(--surface-container-highest); }
+        .header-actions__contacts {
+            color: var(--on-primary); background: linear-gradient(135deg, var(--primary), var(--primary-container));
+            box-shadow: 0 2px 8px rgba(149,44,177,0.15);
+        }
+        .header-actions__contacts:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(149,44,177,0.25); }
+        .header-actions__username {
+            font-size: 0.65rem; font-weight: 700; color: var(--on-surface-variant);
+            letter-spacing: 0.05em;
+        }
 
         /* ── Chat Canvas ── */
         .chat-canvas {
@@ -283,7 +302,9 @@
                 </span>
             </div>
         </div>
-        <span class="header-brand">n-chat</span>
+        <div class="header-actions" id="headerActions">
+            <!-- Filled by JS: login link or contacts+username -->
+        </div>
     </header>
 
     <!-- Chat Canvas -->
@@ -337,6 +358,8 @@
         let visitorInfo = null;
         let hasShownPopup = false;
         let messageCount = 0;
+        const renderedIds = new Set();  // dedup: tracks all rendered message IDs
+        let isSending = false;          // send lock to prevent double-clicks
 
         // ── DOM Refs ──
         const chatCanvas = document.getElementById('chatCanvas');
@@ -366,6 +389,9 @@
                     }
                 }
 
+                // Update header actions (login/contacts)
+                updateHeaderActions();
+
                 // Load existing messages
                 const msgData = await NChat.Visitor.getMessages();
                 if (msgData.messages.length === 0) {
@@ -393,6 +419,16 @@
             }
         }
 
+        function updateHeaderActions() {
+            const ha = document.getElementById('headerActions');
+            if (NChat.Visitor.isLoggedIn()) {
+                const info = NChat.Visitor.getInfo();
+                ha.innerHTML = `<span class="header-actions__username">@${info.username || 'user'}</span><a href="contacts.html" class="header-actions__contacts">Contacts</a>`;
+            } else {
+                ha.innerHTML = `<a href="login.html" class="header-actions__login">Login</a>`;
+            }
+        }
+
         // ── Polling Callback ──
         function onNewMessages(messages, adminOnline) {
             // Update admin status
@@ -406,25 +442,27 @@
                 document.querySelector('.header-status').classList.remove('online');
             }
 
-            // Filter to only admin messages (we already have our own)
-            const adminMsgs = messages.filter(m => m.sender_type === 'admin');
-            if (adminMsgs.length > 0) {
-                adminMsgs.forEach(m => appendMessage(m, true));
-                scrollToBottom();
-            }
+            // Append all new messages — appendMessage handles dedup via renderedIds
+            let added = false;
+            messages.forEach(m => {
+                if (appendMessage(m, true)) added = true;
+            });
+            if (added) scrollToBottom();
         }
 
         // ── Send Message ──
         async function sendMessage() {
             const text = messageInput.value.trim();
-            if (!text) return;
+            if (!text || isSending) return;
 
+            isSending = true;
             messageInput.value = '';
             welcomeCard.style.display = 'none';
 
-            // Optimistic append
+            // Optimistic append with temp ID
+            const tempId = 'temp_' + Date.now();
             const tempMsg = {
-                id: Date.now(),
+                id: tempId,
                 sender_type: 'visitor',
                 body: text,
                 time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
@@ -433,11 +471,17 @@
             scrollToBottom();
 
             try {
-                await NChat.Visitor.sendMessage(text);
+                const result = await NChat.Visitor.sendMessage(text);
+                // Register real server ID so polling skips it
+                if (result.message) {
+                    renderedIds.add(result.message.id);
+                }
                 messageCount++;
                 checkSavePopup();
             } catch (err) {
                 console.error('Send error:', err);
+            } finally {
+                isSending = false;
             }
         }
 
@@ -449,8 +493,12 @@
             }
         });
 
-        // ── Append Message to DOM ──
+        // ── Append Message to DOM (returns true if actually added) ──
         function appendMessage(msg, animate) {
+            // Dedup: skip if this real ID was already rendered
+            if (renderedIds.has(msg.id)) return false;
+            renderedIds.add(msg.id);
+
             const group = document.createElement('div');
             group.className = `msg-group msg-group--${msg.sender_type === 'visitor' ? 'sent' : 'received'}`;
             if (!animate) group.style.animation = 'none';
@@ -466,6 +514,7 @@
             group.appendChild(bubble);
             group.appendChild(ts);
             chatCanvas.appendChild(group);
+            return true;
         }
 
         function addDayDivider(label) {

@@ -1,13 +1,15 @@
-/**
- * n-chat API Service
- * Shared API client for visitor and admin frontends.
- * Configurable base URL for easy deployment changes.
- */
-
 const NChat = (() => {
     // ── Config ──
-    const API_BASE = 'http://localhost:8000/api';
-    const POLL_INTERVAL = 500; // 500ms polling
+    const API_BASE = 'http://localhost:8080/api';
+    const POLL_INTERVAL = 500;
+
+    // ── UUID helper ──
+    function uuid() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+            const r = Math.random() * 16 | 0;
+            return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+        });
+    }
 
     // ── Helpers ──
     async function request(method, path, body = null, headers = {}) {
@@ -35,6 +37,8 @@ const NChat = (() => {
         _token: null,
         _pollTimer: null,
         _lastId: 0,
+        _convPollTimer: null,
+        _convLastId: 0,
 
         getToken() {
             if (this._token) return this._token;
@@ -47,6 +51,26 @@ const NChat = (() => {
             localStorage.setItem('nchat_visitor_token', token);
         },
 
+        clearToken() {
+            this._token = null;
+            localStorage.removeItem('nchat_visitor_token');
+            localStorage.removeItem('nchat_visitor_info');
+        },
+
+        isLoggedIn() {
+            const info = localStorage.getItem('nchat_visitor_info');
+            if (!info) return false;
+            try { return JSON.parse(info).is_logged_in === true; } catch { return false; }
+        },
+
+        getInfo() {
+            try { return JSON.parse(localStorage.getItem('nchat_visitor_info')); } catch { return null; }
+        },
+
+        setInfo(info) {
+            localStorage.setItem('nchat_visitor_info', JSON.stringify(info));
+        },
+
         headers() {
             const t = this.getToken();
             return t ? { 'X-Visitor-Token': t } : {};
@@ -56,6 +80,28 @@ const NChat = (() => {
             const data = await request('POST', '/visitor/init', null, this.headers());
             if (data.visitor && data.visitor.token) {
                 this.setToken(data.visitor.token);
+                this.setInfo(data.visitor);
+            }
+            return data;
+        },
+
+        async signup(name, email, password, username) {
+            const data = await request('POST', '/visitor/signup', { name, email, password, username }, this.headers());
+            if (data.visitor && data.visitor.token) {
+                this.setToken(data.visitor.token);
+                this.setInfo(data.visitor);
+            }
+            return data;
+        },
+
+        async login(email, password) {
+            const data = await request('POST', '/visitor/login', { email, password });
+            if (data.is_admin && data.token) {
+                // Admin login via visitor endpoint
+                NChat.Admin.setToken(data.token);
+            } else if (data.visitor && data.visitor.token) {
+                this.setToken(data.visitor.token);
+                this.setInfo(data.visitor);
             }
             return data;
         },
@@ -68,42 +114,84 @@ const NChat = (() => {
             return data;
         },
 
-        async sendMessage(body) {
-            const data = await request('POST', '/visitor/messages', { body }, this.headers());
+        async sendMessage(body, conversationId = null) {
+            const clientId = uuid();
+            const payload = { body, client_id: clientId };
+            if (conversationId) payload.conversation_id = conversationId;
+            const data = await request('POST', '/visitor/messages', payload, this.headers());
             if (data.message) {
                 this._lastId = Math.max(this._lastId, data.message.id);
             }
-            return data;
+            return { ...data, client_id: clientId };
         },
 
-        async poll() {
-            return await request('GET', `/visitor/poll?since_id=${this._lastId}`, null, this.headers());
+        async poll(conversationId = null) {
+            const params = `since_id=${this._lastId}` + (conversationId ? `&conversation_id=${conversationId}` : '');
+            return await request('GET', `/visitor/poll?${params}`, null, this.headers());
         },
 
         async saveInfo(name, email) {
             return await request('POST', '/visitor/save-info', { name, email }, this.headers());
         },
 
-        startPolling(onNewMessages) {
+        // ── Contacts & V2V ──
+
+        async getContacts() {
+            return await request('GET', '/visitor/contacts', null, this.headers());
+        },
+
+        async searchUsers(q) {
+            return await request('GET', `/visitor/search-users?q=${encodeURIComponent(q)}`, null, this.headers());
+        },
+
+        async startChat(username) {
+            return await request('POST', '/visitor/start-chat', { username }, this.headers());
+        },
+
+        async getConversationMessages(conversationId) {
+            const data = await request('GET', `/visitor/conversations/${conversationId}/messages`, null, this.headers());
+            if (data.messages && data.messages.length > 0) {
+                this._convLastId = data.messages[data.messages.length - 1].id;
+            }
+            return data;
+        },
+
+        async pollConversation(conversationId) {
+            return await request('GET', `/visitor/conversations/${conversationId}/poll?since_id=${this._convLastId}`, null, this.headers());
+        },
+
+        startPolling(onNewMessages, conversationId = null) {
             this.stopPolling();
             this._pollTimer = setInterval(async () => {
                 try {
-                    const data = await this.poll();
+                    const data = await this.poll(conversationId);
                     if (data.messages && data.messages.length > 0) {
                         this._lastId = data.messages[data.messages.length - 1].id;
                         onNewMessages(data.messages, data.admin_online);
                     }
-                } catch (e) {
-                    // silently retry
-                }
+                } catch (e) { /* silently retry */ }
             }, POLL_INTERVAL);
         },
 
         stopPolling() {
-            if (this._pollTimer) {
-                clearInterval(this._pollTimer);
-                this._pollTimer = null;
-            }
+            if (this._pollTimer) { clearInterval(this._pollTimer); this._pollTimer = null; }
+        },
+
+        startConversationPolling(conversationId, onNewMessages) {
+            this.stopConversationPolling();
+            this._convPollTimer = setInterval(async () => {
+                try {
+                    const data = await this.pollConversation(conversationId);
+                    if (data.messages && data.messages.length > 0) {
+                        this._convLastId = data.messages[data.messages.length - 1].id;
+                        onNewMessages(data.messages, data.other_online);
+                    }
+                } catch (e) { /* silently retry */ }
+            }, POLL_INTERVAL);
+        },
+
+        stopConversationPolling() {
+            if (this._convPollTimer) { clearInterval(this._convPollTimer); this._convPollTimer = null; }
         },
     };
 
@@ -161,11 +249,12 @@ const NChat = (() => {
         },
 
         async sendMessage(visitorId, body) {
-            const data = await request('POST', `/admin/conversations/${visitorId}/messages`, { body }, this.headers());
+            const clientId = uuid();
+            const data = await request('POST', `/admin/conversations/${visitorId}/messages`, { body, client_id: clientId }, this.headers());
             if (data.message) {
                 this._convLastId = Math.max(this._convLastId, data.message.id);
             }
-            return data;
+            return { ...data, client_id: clientId };
         },
 
         async poll() {
@@ -176,7 +265,6 @@ const NChat = (() => {
             return await request('GET', `/admin/conversations/${visitorId}/poll?since_id=${this._convLastId}`, null, this.headers());
         },
 
-        // Poll globally for new messages (for conversation list)
         startGlobalPolling(onNewData) {
             this.stopGlobalPolling();
             this._pollTimer = setInterval(async () => {
@@ -196,13 +284,9 @@ const NChat = (() => {
         },
 
         stopGlobalPolling() {
-            if (this._pollTimer) {
-                clearInterval(this._pollTimer);
-                this._pollTimer = null;
-            }
+            if (this._pollTimer) { clearInterval(this._pollTimer); this._pollTimer = null; }
         },
 
-        // Poll specific conversation for new messages
         startConversationPolling(visitorId, onNewMessages) {
             this.stopConversationPolling();
             this._convPollTimer = setInterval(async () => {
@@ -212,17 +296,12 @@ const NChat = (() => {
                         this._convLastId = data.messages[data.messages.length - 1].id;
                         onNewMessages(data.messages, data.visitor_online);
                     }
-                } catch (e) {
-                    // silently retry
-                }
+                } catch (e) { /* silently retry */ }
             }, POLL_INTERVAL);
         },
 
         stopConversationPolling() {
-            if (this._convPollTimer) {
-                clearInterval(this._convPollTimer);
-                this._convPollTimer = null;
-            }
+            if (this._convPollTimer) { clearInterval(this._convPollTimer); this._convPollTimer = null; }
         },
     };
 

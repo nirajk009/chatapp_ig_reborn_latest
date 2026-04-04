@@ -3,15 +3,16 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Message extends Model
 {
     protected $fillable = [
-        'visitor_id',
+        'conversation_id',
+        'sender_id',
         'sender_type',
         'body',
         'is_read',
+        'client_id',
     ];
 
     protected function casts(): array
@@ -21,18 +22,8 @@ class Message extends Model
         ];
     }
 
-    public function visitor(): BelongsTo
+    public function conversation()
     {
-        return $this->belongsTo(Visitor::class);
-    }
-
-    public function isFromVisitor(): bool
-    {
-        return $this->sender_type === 'visitor';
-    }
-
-    public function isFromAdmin(): bool
-    {
-        return $this->sender_type === 'admin';
+        return $this->belongsTo(Conversation::class);
     }
 }

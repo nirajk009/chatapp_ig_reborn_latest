@@ -11,8 +11,10 @@ return new class extends Migration
         Schema::create('visitors', function (Blueprint $table) {
             $table->id();
             $table->string('token', 64)->unique();
+            $table->string('username', 30)->unique()->nullable();
             $table->string('name')->nullable();
-            $table->string('email')->nullable();
+            $table->string('email')->unique()->nullable();
+            $table->string('password')->nullable();
             $table->string('ip_address', 45)->nullable();
             $table->text('user_agent')->nullable();
             $table->timestamp('last_seen_at')->nullable();

@@ -10,10 +10,10 @@ class AdminSeeder extends Seeder
     public function run(): void
     {
         Admin::updateOrCreate(
-            ['email' => 'admin@nchat.io'],
+            ['email' => 'admin@test.com'],
             [
-                'name' => 'Neeraj',
-                'password' => bcrypt('admin123'),
+                'name' => 'Niraj',
+                'password' => bcrypt('password'),
                 'avatar_url' => null,
             ]
         );

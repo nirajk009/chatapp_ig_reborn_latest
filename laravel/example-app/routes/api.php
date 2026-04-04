@@ -1,30 +1,33 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Api\VisitorChatController;
 use App\Http\Controllers\Api\AdminController;
+use App\Http\Controllers\Api\VisitorChatController;
+use Illuminate\Support\Facades\Route;
 
-/*
-|--------------------------------------------------------------------------
-| API Routes
-|--------------------------------------------------------------------------
-*/
-
-// Visitor endpoints (token via X-Visitor-Token header)
+// ─── Visitor Routes ───
 Route::prefix('visitor')->group(function () {
     Route::post('/init', [VisitorChatController::class, 'init']);
+    Route::post('/signup', [VisitorChatController::class, 'signup']);
+    Route::post('/login', [VisitorChatController::class, 'login']);
     Route::get('/messages', [VisitorChatController::class, 'getMessages']);
     Route::post('/messages', [VisitorChatController::class, 'sendMessage']);
     Route::get('/poll', [VisitorChatController::class, 'poll']);
     Route::post('/save-info', [VisitorChatController::class, 'saveInfo']);
+
+    // Logged-in visitor routes
+    Route::get('/contacts', [VisitorChatController::class, 'contacts']);
+    Route::get('/search-users', [VisitorChatController::class, 'searchUsers']);
+    Route::post('/start-chat', [VisitorChatController::class, 'startChat']);
+    Route::get('/conversations/{conversationId}/messages', [VisitorChatController::class, 'conversationMessages']);
+    Route::get('/conversations/{conversationId}/poll', [VisitorChatController::class, 'pollConversation']);
 });
 
-// Admin endpoints (token via Authorization: Bearer header)
+// ─── Admin Routes ───
 Route::prefix('admin')->group(function () {
     Route::post('/login', [AdminController::class, 'login']);
     Route::get('/conversations', [AdminController::class, 'conversations']);
-    Route::get('/conversations/{visitor_id}/messages', [AdminController::class, 'getMessages']);
-    Route::post('/conversations/{visitor_id}/messages', [AdminController::class, 'sendMessage']);
+    Route::get('/conversations/{visitorId}/messages', [AdminController::class, 'getMessages']);
+    Route::post('/conversations/{visitorId}/messages', [AdminController::class, 'sendMessage']);
     Route::get('/poll', [AdminController::class, 'poll']);
-    Route::get('/conversations/{visitor_id}/poll', [AdminController::class, 'pollConversation']);
+    Route::get('/conversations/{visitorId}/poll', [AdminController::class, 'pollConversation']);
 });

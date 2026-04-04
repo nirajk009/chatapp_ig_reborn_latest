@@ -3,700 +3,390 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Pulse - Contacts</title>
-    <meta name="description" content="Your contacts on Pulse - See who's online and connect instantly." />
+    <title>n-chat | Contacts</title>
+    <meta name="description" content="Your contacts on n-chat" />
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
     <style>
-        /* ========================================
-           DESIGN SYSTEM: VELVET PULSE – CONTACTS
-           ======================================== */
         :root {
-            --primary: #952cb1;
-            --primary-dim: #871ba4;
-            --primary-container: #f1a6ff;
-            --on-primary: #fff7fb;
-            --on-primary-container: #680082;
-            --secondary: #8c3e9b;
-            --secondary-container: #fed6ff;
+            --primary: #952cb1; --primary-dim: #871ba4; --primary-container: #f1a6ff;
+            --on-primary: #fff7fb; --on-primary-container: #680082;
+            --secondary: #8c3e9b; --secondary-container: #fed6ff;
             --on-secondary-container: #7d308d;
-            --surface: #fff7fb;
-            --surface-container-low: #ffeffc;
-            --surface-container-high: #fedeff;
-            --surface-container-highest: #fdd6ff;
-            --on-surface: #45274b;
-            --on-surface-variant: #75547a;
-            --outline: #926f97;
-            --outline-variant: #cca5d0;
+            --surface: #fff7fb; --surface-container-low: #ffeffc;
+            --surface-container-high: #fedeff; --surface-container-highest: #fdd6ff;
+            --on-surface: #45274b; --on-surface-variant: #75547a;
+            --outline: #926f97; --outline-variant: #cca5d0;
             --green: #4ade80;
-            --font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-            --radius-full: 9999px;
-            --radius-lg: 2rem;
-            --radius-md: 1rem;
+            --font: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
         }
 
         *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-
-        html {
-            font-size: 16px;
-            -webkit-font-smoothing: antialiased;
-        }
-
+        html { font-size: 16px; -webkit-font-smoothing: antialiased; }
         body {
-            font-family: var(--font-family);
-            background-color: var(--surface);
-            color: var(--on-surface);
-            min-height: 100dvh;
-            overflow-x: hidden;
+            font-family: var(--font); background: var(--surface); color: var(--on-surface);
+            min-height: 100dvh; overflow-x: hidden;
         }
+        ::selection { background: var(--primary-container); color: var(--on-primary-container); }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 
-        ::selection {
-            background: var(--primary-container);
-            color: var(--on-primary-container);
-        }
-
-        .material-symbols-outlined {
-            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-        }
-
-        /* --- Top App Bar --- */
+        /* ── Topbar ── */
         .topbar {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 50;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0 1.5rem;
-            height: 4rem;
-            background: rgba(255, 247, 251, 0.8);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            box-shadow: 0 1px 12px rgba(69, 39, 75, 0.05);
+            position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0 1.5rem; height: 4rem;
+            background: rgba(255,247,251,0.85); backdrop-filter: blur(16px);
+            box-shadow: 0 1px 12px rgba(69,39,75,0.05);
         }
-
-        .topbar__left {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-        }
-
+        .topbar__left { display: flex; align-items: center; gap: 0.75rem; }
         .topbar__avatar {
-            width: 2.5rem;
-            height: 2.5rem;
-            border-radius: var(--radius-md);
-            overflow: hidden;
-            background: var(--primary-container);
+            width: 2.5rem; height: 2.5rem; border-radius: 1rem;
+            background: linear-gradient(135deg, var(--primary), var(--primary-container));
+            display: flex; align-items: center; justify-content: center;
+            color: var(--on-primary); font-weight: 800; font-size: 1rem;
         }
-
-        .topbar__avatar img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
+        .topbar__info { display: flex; flex-direction: column; }
+        .topbar__title { font-weight: 800; font-size: 1.25rem; letter-spacing: -0.02em; color: var(--primary); }
+        .topbar__username { font-size: 0.65rem; font-weight: 600; color: var(--on-surface-variant); letter-spacing: 0.03em; }
+        .topbar__actions { display: flex; align-items: center; gap: 0.5rem; }
+        .topbar__btn {
+            background: none; border: none; color: var(--on-surface-variant); cursor: pointer;
+            padding: 0.5rem; border-radius: 50%; display: flex; align-items: center;
+            transition: all 0.2s;
         }
-
-        .topbar__title {
-            font-weight: 800;
-            font-size: 1.25rem;
-            letter-spacing: -0.02em;
-            color: var(--primary);
+        .topbar__btn:hover { background: var(--surface-container-high); color: var(--primary); }
+        .topbar__btn--chat {
+            text-decoration: none; background: var(--surface-container-high);
+            color: var(--primary); font-size: 0.7rem; font-weight: 700;
+            padding: 0.4rem 0.8rem; border-radius: 999px; text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
+        .topbar__btn--chat:hover { background: var(--surface-container-highest); }
 
-        .topbar__search-btn {
-            background: none;
-            border: none;
-            color: var(--primary);
-            cursor: pointer;
-            padding: 0.5rem;
-            border-radius: 50%;
-            transition: all 0.2s ease;
-            display: flex;
-            align-items: center;
-        }
+        /* ── Content ── */
+        .main { padding: 5.5rem 1.5rem 8rem; max-width: 640px; margin: 0 auto; animation: fadeIn 0.4s ease; }
 
-        .topbar__search-btn:hover {
-            background: var(--surface-container-high);
-        }
-
-        .topbar__search-btn:active {
-            transform: scale(0.92);
-        }
-
-        /* --- Main Content --- */
-        .main-content {
-            padding: 5.5rem 1.5rem 8rem;
-            max-width: 640px;
-            margin: 0 auto;
-            animation: fadeIn 0.5s ease-out;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-
-        /* --- Search Bar --- */
-        .search-bar {
-            position: relative;
-            margin-bottom: 2.5rem;
-        }
-
+        /* Search */
+        .search-bar { position: relative; margin-bottom: 2rem; }
         .search-bar__icon {
-            position: absolute;
-            left: 1.25rem;
-            top: 50%;
-            transform: translateY(-50%);
-            color: rgba(117, 84, 122, 0.6);
-            font-size: 1.25rem;
-            pointer-events: none;
+            position: absolute; left: 1.25rem; top: 50%; transform: translateY(-50%);
+            color: rgba(117,84,122,0.5); font-size: 1.25rem; pointer-events: none;
         }
-
         .search-bar__input {
-            width: 100%;
-            background: var(--surface-container-low);
-            border: none;
-            border-radius: var(--radius-full);
-            padding: 1rem 1.5rem 1rem 3.5rem;
-            font-family: var(--font-family);
-            font-size: 0.95rem;
-            color: var(--on-surface);
-            outline: none;
-            transition: all 0.3s ease;
+            width: 100%; background: var(--surface-container-low); border: none;
+            border-radius: 999px; padding: 0.9rem 1.5rem 0.9rem 3.5rem;
+            font-family: var(--font); font-size: 0.9rem; color: var(--on-surface); outline: none;
+            transition: all 0.3s;
         }
+        .search-bar__input::placeholder { color: rgba(117,84,122,0.4); }
+        .search-bar__input:focus { box-shadow: 0 0 0 3px rgba(149,44,177,0.12); background: var(--surface); }
 
-        .search-bar__input::placeholder {
-            color: rgba(117, 84, 122, 0.4);
+        /* Search Results Dropdown */
+        .search-results {
+            position: absolute; top: 100%; left: 0; right: 0; z-index: 10;
+            background: var(--surface); border-radius: 1rem; margin-top: 0.5rem;
+            box-shadow: 0 8px 32px rgba(69,39,75,0.12);
+            display: none; overflow: hidden;
         }
-
-        .search-bar__input:focus {
-            box-shadow: 0 0 0 3px rgba(149, 44, 177, 0.12);
-            background: var(--surface);
+        .search-results.show { display: block; }
+        .search-result-item {
+            display: flex; align-items: center; gap: 1rem; padding: 0.9rem 1.25rem;
+            cursor: pointer; transition: background 0.15s;
         }
-
-        /* --- Section Title --- */
-        .section-title {
-            font-size: 0.6875rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.15em;
-            color: var(--on-surface-variant);
-            padding-left: 0.5rem;
-            margin-bottom: 1.5rem;
-        }
-
-        /* --- Online Now Grid --- */
-        .online-section {
-            margin-bottom: 3rem;
-        }
-
-        .online-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1rem;
-        }
-
-        /* Featured Card (Elena Rose) */
-        .featured-card {
-            background: var(--surface-container-high);
-            border-radius: var(--radius-md);
-            padding: 1.5rem;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            aspect-ratio: 1;
-            position: relative;
-            overflow: hidden;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .featured-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 24px rgba(69, 39, 75, 0.08);
-        }
-
-        .featured-card:active {
-            transform: scale(0.98);
-        }
-
-        .featured-card__status {
-            position: absolute;
-            top: 1rem;
-            right: 1rem;
-            width: 0.75rem;
-            height: 0.75rem;
-            background: var(--green);
-            border-radius: 50%;
-            box-shadow: 0 0 0 3px var(--surface-container-high);
-        }
-
-        .featured-card__avatar {
-            width: 5rem;
-            height: 5rem;
-            border-radius: var(--radius-md);
-            object-fit: cover;
-            margin-bottom: 1rem;
-        }
-
-        .featured-card__name {
-            font-weight: 700;
-            font-size: 1.1rem;
-            color: var(--on-surface);
-            line-height: 1.2;
-        }
-
-        .featured-card__meta {
-            font-size: 0.8rem;
-            color: var(--on-surface-variant);
-            margin-top: 0.25rem;
-        }
-
-        /* Small online cards (right column) */
-        .online-stack {
-            display: grid;
-            grid-template-rows: 1fr 1fr;
-            gap: 1rem;
-        }
-
-        .small-card {
-            background: var(--secondary-container);
-            border-radius: var(--radius-md);
-            padding: 1rem;
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .small-card:nth-child(2) {
-            background: var(--surface-container-low);
-        }
-
-        .small-card:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 16px rgba(69, 39, 75, 0.06);
-        }
-
-        .small-card:active {
-            transform: scale(0.97);
-        }
-
-        .small-card__avatar-wrap {
-            position: relative;
-            flex-shrink: 0;
-        }
-
-        .small-card__avatar {
-            width: 3rem;
-            height: 3rem;
-            border-radius: var(--radius-md);
-            object-fit: cover;
-        }
-
-        .small-card__status {
-            position: absolute;
-            bottom: -3px;
-            right: -3px;
-            width: 0.75rem;
-            height: 0.75rem;
-            background: var(--green);
-            border-radius: 50%;
-            box-shadow: 0 0 0 2px var(--secondary-container);
-        }
-
-        .small-card:nth-child(2) .small-card__status {
-            box-shadow: 0 0 0 2px var(--surface-container-low);
-        }
-
-        .small-card__name {
-            font-weight: 600;
-            font-size: 0.95rem;
-            color: var(--on-surface);
-        }
-
-        .small-card:first-child .small-card__name {
-            color: var(--on-secondary-container);
-        }
-
-        /* --- Recent Interactions --- */
-        .recent-section {
-            margin-top: 0;
-        }
-
-        .contacts-list {
-            display: flex;
-            flex-direction: column;
-            gap: 2rem;
-        }
-
-        .contact-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            cursor: pointer;
-            padding: 0.5rem;
-            border-radius: var(--radius-md);
-            transition: all 0.2s ease;
-            text-decoration: none;
-            color: inherit;
-        }
-
-        .contact-item:hover {
-            background: var(--surface-container-low);
-        }
-
-        .contact-item:active {
-            transform: scale(0.99);
-        }
-
-        .contact-item__left {
-            display: flex;
-            align-items: center;
-            gap: 1.25rem;
-        }
-
-        .contact-item__avatar {
-            width: 3.5rem;
-            height: 3.5rem;
-            border-radius: var(--radius-md);
-            overflow: hidden;
+        .search-result-item:hover { background: var(--surface-container-low); }
+        .search-result-item__avatar {
+            width: 2.5rem; height: 2.5rem; border-radius: 0.75rem;
             background: var(--surface-container-highest);
-            flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 700; font-size: 0.9rem; color: var(--primary); flex-shrink: 0;
+        }
+        .search-result-item__info { flex: 1; }
+        .search-result-item__name { font-weight: 700; font-size: 0.95rem; color: var(--on-surface); }
+        .search-result-item__user { font-size: 0.75rem; color: var(--on-surface-variant); }
+        .search-result-item__action {
+            font-size: 0.6rem; font-weight: 700; text-transform: uppercase;
+            color: var(--primary); background: var(--surface-container-high);
+            padding: 0.3rem 0.7rem; border-radius: 999px; letter-spacing: 0.05em;
+        }
+        .search-no-results { padding: 1.25rem; text-align: center; color: var(--on-surface-variant); font-size: 0.85rem; }
+
+        /* Section */
+        .section-title {
+            font-size: 0.6875rem; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.15em; color: var(--on-surface-variant);
+            padding-left: 0.5rem; margin-bottom: 1.25rem;
         }
 
-        .contact-item__avatar img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
+        /* Contact List */
+        .contacts-list { display: flex; flex-direction: column; gap: 0.5rem; }
+        .contact-item {
+            display: flex; align-items: center; gap: 1.25rem; padding: 0.75rem 0.75rem;
+            border-radius: 1rem; cursor: pointer; transition: all 0.2s;
+            text-decoration: none; color: inherit; animation: fadeInUp 0.3s ease;
         }
-
-        .contact-item__avatar--initials {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            font-size: 1.1rem;
-            color: var(--primary);
+        .contact-item:hover { background: var(--surface-container-low); }
+        .contact-item:active { transform: scale(0.99); }
+        .contact-item__avatar {
+            width: 3.5rem; height: 3.5rem; border-radius: 1rem;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 800; font-size: 1.1rem; flex-shrink: 0;
         }
-
-        .contact-item__info {
-            display: flex;
-            flex-direction: column;
-            gap: 0.15rem;
-        }
-
-        .contact-item__name {
-            font-weight: 700;
-            font-size: 1.1rem;
-            color: var(--on-surface);
-            line-height: 1.2;
-        }
-
-        .contact-item__email {
-            font-size: 0.85rem;
-            color: var(--on-surface-variant);
-        }
-
-        .contact-item__right {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-end;
-            gap: 0.35rem;
-        }
-
-        .contact-item__status-label {
-            font-size: 0.625rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-        }
-
-        .contact-item__status-label--online {
-            color: var(--primary);
-        }
-
-        .contact-item__status-label--away {
-            color: var(--on-surface-variant);
-        }
-
-        .contact-item__status-label--offline {
-            color: rgba(117, 84, 122, 0.4);
-        }
-
-        .contact-item__dot {
-            width: 0.5rem;
-            height: 0.5rem;
-            border-radius: 50%;
-        }
-
-        .contact-item__dot--online {
-            background: var(--green);
-        }
-
-        .contact-item__dot--away {
-            background: rgba(204, 165, 208, 0.4);
-        }
-
-        .contact-item__dot--offline {
-            background: rgba(204, 165, 208, 0.2);
-        }
-
-        /* --- FAB --- */
-        .fab {
-            position: fixed;
-            bottom: 6.5rem;
-            right: 1.5rem;
-            width: 3.5rem;
-            height: 3.5rem;
-            border-radius: 50%;
-            background: linear-gradient(135deg, var(--primary), var(--primary-dim));
+        .contact-item__avatar--admin {
+            background: linear-gradient(135deg, var(--primary), var(--primary-container));
             color: var(--on-primary);
-            border: none;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 8px 24px rgba(149, 44, 177, 0.25);
-            z-index: 40;
-            transition: all 0.3s ease;
         }
-
-        .fab:hover {
-            transform: scale(1.08);
-            box-shadow: 0 12px 32px rgba(149, 44, 177, 0.35);
-        }
-
-        .fab:active {
-            transform: scale(0.92);
-        }
-
-        /* --- Bottom Navigation --- */
-        .bottom-nav {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            z-index: 50;
-            display: flex;
-            justify-content: space-around;
-            align-items: center;
-            padding: 0.5rem 2rem 1.5rem;
-            background: var(--surface);
-            border-radius: 2.5rem 2.5rem 0 0;
-            box-shadow: 0 -4px 20px rgba(69, 39, 75, 0.04);
-        }
-
-        .nav-item {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 0.75rem;
-            border-radius: 50%;
-            text-decoration: none;
-            transition: all 0.3s ease;
-        }
-
-        .nav-item--inactive {
-            color: var(--on-surface-variant);
-        }
-
-        .nav-item--inactive:hover {
-            background: var(--surface-container-low);
-        }
-
-        .nav-item--active {
-            background: var(--surface-container-high);
+        .contact-item__avatar--visitor {
+            background: var(--surface-container-highest);
             color: var(--primary);
-            transform: scale(1.1);
         }
+        .contact-item__body { flex: 1; min-width: 0; }
+        .contact-item__top { display: flex; justify-content: space-between; align-items: center; }
+        .contact-item__name { font-weight: 700; font-size: 1rem; color: var(--on-surface); }
+        .contact-item__time { font-size: 0.625rem; font-weight: 600; color: var(--on-surface-variant); }
+        .contact-item__bottom { display: flex; justify-content: space-between; align-items: center; margin-top: 0.2rem; }
+        .contact-item__preview {
+            font-size: 0.825rem; color: var(--on-surface-variant);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80%;
+        }
+        .contact-item__badge {
+            min-width: 1.25rem; height: 1.25rem; border-radius: 999px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-container));
+            color: var(--on-primary); font-size: 0.6rem; font-weight: 800;
+            display: flex; align-items: center; justify-content: center;
+            padding: 0 0.35rem;
+        }
+        .contact-item__status-dot {
+            width: 0.5rem; height: 0.5rem; border-radius: 50%;
+            position: absolute; bottom: 2px; right: 2px;
+        }
+        .contact-item__avatar-wrap { position: relative; }
+        .contact-item__status-dot.online { background: var(--green); box-shadow: 0 0 0 2px var(--surface); }
+        .contact-item__status-dot.offline { background: var(--outline-variant); box-shadow: 0 0 0 2px var(--surface); }
 
-        .nav-item .material-symbols-outlined {
-            font-size: 1.5rem;
+        /* Empty state */
+        .empty-state {
+            text-align: center; padding: 3rem 1.5rem; animation: fadeInUp 0.5s ease;
         }
+        .empty-state__icon { font-size: 3rem; color: var(--outline-variant); margin-bottom: 1rem; }
+        .empty-state__title { font-size: 1.1rem; font-weight: 700; color: var(--on-surface); margin-bottom: 0.35rem; }
+        .empty-state__sub { font-size: 0.85rem; color: var(--on-surface-variant); }
 
-        /* --- Responsive --- */
-        @media (max-width: 380px) {
-            .featured-card__avatar { width: 3.5rem; height: 3.5rem; }
-            .featured-card { padding: 1rem; }
+        /* Bottom Nav */
+        .bottom-nav {
+            position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
+            display: flex; justify-content: space-around; align-items: center;
+            padding: 0.5rem 2rem 1.5rem; background: var(--surface);
+            border-radius: 2.5rem 2.5rem 0 0; box-shadow: 0 -4px 20px rgba(69,39,75,0.04);
         }
+        .nav-item {
+            display: flex; align-items: center; justify-content: center;
+            padding: 0.75rem; border-radius: 50%; text-decoration: none;
+            transition: all 0.3s;
+        }
+        .nav-item--inactive { color: var(--on-surface-variant); }
+        .nav-item--inactive:hover { background: var(--surface-container-low); }
+        .nav-item--active { background: var(--surface-container-high); color: var(--primary); transform: scale(1.1); }
+        .nav-item .material-symbols-outlined { font-size: 1.5rem; }
+
+        /* Logout */
+        .logout-btn {
+            display: block; margin: 2rem auto 0; padding: 0.6rem 1.5rem; border: none; border-radius: 999px;
+            background: rgba(172,49,73,0.08); color: var(--error, #ac3149);
+            font-family: var(--font); font-size: 0.75rem; font-weight: 700;
+            cursor: pointer; transition: all 0.2s; text-transform: uppercase; letter-spacing: 0.08em;
+        }
+        .logout-btn:hover { background: rgba(172,49,73,0.15); }
     </style>
 </head>
 <body>
-    <!-- Top App Bar -->
+    <!-- Topbar -->
     <header class="topbar">
         <div class="topbar__left">
-            <div class="topbar__avatar">
-                <img alt="Your profile" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAbVsXiOLbA4zgzY9OK07j8ecKYCOq7ixe8ZMlh6MryRzkfjXwWMnS33xTTF7ruFmhVd914Vt7AKInvIDPK1dxe4PattSrIG42R7at4bbbtY4X3efAML86nZqUhNu5VaSY1GNNiOr8JWb2FC5sgLNZvFB9iw0aLRgc43UygU2XXdWqOA-rDgXVlsLG3h8Gekct4qMSUiiSI2WBmCrFXz-xwf6F0yJbfgAvqnNdH6GSQ4KM_D1hel2koq9LRFLob1L6iqvG4h7l6Xb0" />
+            <div class="topbar__avatar" id="myAvatar">?</div>
+            <div class="topbar__info">
+                <span class="topbar__title">n-chat</span>
+                <span class="topbar__username" id="myUsername">@loading</span>
             </div>
-            <h1 class="topbar__title">Pulse</h1>
         </div>
-        <button class="topbar__search-btn" aria-label="Search contacts">
-            <span class="material-symbols-outlined">search</span>
-        </button>
+        <div class="topbar__actions">
+            <a class="topbar__btn--chat" href="visitor.html">Chat</a>
+        </div>
     </header>
 
     <!-- Main Content -->
-    <main class="main-content">
-        <!-- Search Bar -->
+    <main class="main">
+        <!-- Search -->
         <div class="search-bar">
             <span class="material-symbols-outlined search-bar__icon">search</span>
-            <input
-                class="search-bar__input"
-                type="text"
-                placeholder="Find a contact..."
-                id="searchInput"
-            />
+            <input class="search-bar__input" type="text" placeholder="Search users by username..." id="searchInput" autocomplete="off" />
+            <div class="search-results" id="searchResults"></div>
         </div>
 
-        <!-- Online Now Section -->
-        <section class="online-section">
-            <h2 class="section-title">Online Now</h2>
-            <div class="online-grid">
-                <!-- Featured Card -->
-                <a class="featured-card" href="chat.html" style="text-decoration:none; color:inherit;">
-                    <div class="featured-card__status"></div>
-                    <img class="featured-card__avatar" alt="Elena Rose" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBJwR9JGLTE6N5UHvv5oNQcgylJdpXLIYRK90xNSU8a8dS6HbKOmMHBWHbBxJ9XmYQx6N0BRjKN8zzbSOsVBL2aOra7pPJlpa3LxFWhvfB7UksLLdrQL2S5D1ATQI11b1Zbi1R-p2CZEgwJGjPTC52oypBjOtPfrtbG78ctme_54DxYsII_aFnieMEdEjmw4P7jz1-cPYFSRkV_MnKfapjvt4L_IET66fJso3Kyy7VqW7CGsTIm93oE8MFsVROiDnxt8Ryk_6JFg3I" />
-                    <div>
-                        <div class="featured-card__name">Elena Rose</div>
-                        <div class="featured-card__meta">Active 2m ago</div>
-                    </div>
-                </a>
-
-                <!-- Right Column Stack -->
-                <div class="online-stack">
-                    <a class="small-card" href="chat.html" style="text-decoration:none; color:inherit;">
-                        <div class="small-card__avatar-wrap">
-                            <img class="small-card__avatar" alt="Marcus" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDao4DkRqJgUvbrOVYriyT8eITPpp0igNRESGA8UtZUHL13mBunbWoUGSXcosLdc-tzeeeyyk7bcTY3D35pKD-9UBNJELt1Hn3AZnXQhIm6i9abigUOmXpL9847gn4iI-ONLxyGbJrcCX1oBWzxobQF8VOzSQJEewXVOnimA8GJm_0Zc3FunwrtTZZm_e3iskek_aNxLbCSiwa1-s00ggFkUzanK9tGAsZxloEhFAIbvJZoNvwqZhmTzwdp5KCf8fketuBwy4t47O4" />
-                            <div class="small-card__status"></div>
-                        </div>
-                        <span class="small-card__name">Marcus</span>
-                    </a>
-                    <a class="small-card" href="chat.html" style="text-decoration:none; color:inherit;">
-                        <div class="small-card__avatar-wrap">
-                            <img class="small-card__avatar" alt="Sasha" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCXqHrZeY8roxHq6_qSbZPR-ncQjDShG-Aw8FQCzDWUdIeL6JuVWSQwH15H2yiLZA4dnrYS3-0k6h-KyEXVWA2yjqFC8JNwAs63PUP4TqMJs4Zhe9U6Q-hfc_4m8cd89c4KrSBbiooXROhEF6n2ffXe7rRt0EbrHJleAnBcWg1Ok29pjqRmeSHE5WAbFXkvdGK4qTYufU6yXxwV4kTrnpAhIRDOP3xWCXcqWgMFtPMWm8ZJsbni7x1JKXP2uMfKzlDA3cWdN6QhO6E" />
-                            <div class="small-card__status"></div>
-                        </div>
-                        <span class="small-card__name">Sasha</span>
-                    </a>
-                </div>
-            </div>
-        </section>
-
-        <!-- Recent Interactions -->
-        <section class="recent-section">
-            <h2 class="section-title">Recent Interactions</h2>
+        <!-- Contacts Section -->
+        <section>
+            <h2 class="section-title">Conversations</h2>
             <div class="contacts-list" id="contactsList">
-                <!-- Julian Vance -->
-                <a class="contact-item" href="chat.html">
-                    <div class="contact-item__left">
-                        <div class="contact-item__avatar">
-                            <img alt="Julian Vance" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAaGRpfoLVXoG4shaxWi7KKGB6oOteBMfr1vIlSiG2LmKS0FTgDDeoy4x-zffthxmPHdYitwiT3BsQG2HyfYf_3QMyVT9b0VzpDOHPIVH_c2_8v2W_FVkZZzVVFoKw4A4UuB5IU5Z4zthEn3gBqwZ0u7BkYLoEQgzkOIpS-XTMkcyc6JXAwbakdqguioIWc_NxhK2mvGNV7Ans1xajrkpr_HWdRAYvEUXfFG9j8GeNU9BWj-hF9VldqAA3bRmzHmVzqA04ntebcAqk" />
-                        </div>
-                        <div class="contact-item__info">
-                            <span class="contact-item__name">Julian Vance</span>
-                            <span class="contact-item__email">julian.v@design.co</span>
-                        </div>
-                    </div>
-                    <div class="contact-item__right">
-                        <span class="contact-item__status-label contact-item__status-label--away">Away</span>
-                        <div class="contact-item__dot contact-item__dot--away"></div>
-                    </div>
-                </a>
-
-                <!-- Amara Okafor -->
-                <a class="contact-item" href="chat.html">
-                    <div class="contact-item__left">
-                        <div class="contact-item__avatar">
-                            <img alt="Amara Okafor" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDBjP9_vfUEOE6slu-Ilm82iMgDAwkPmZEtyDEcYT3MZ9k_WiZZnQC-GDDB8d5nvr3yqSQMuYty-kc89yQGVPfWCTfGEA86f1I2TItAnRsg8PodnnHc3f2hcs_1vuLHCqBXcOvj4GU2kMtK1cZjs5evspQOT2Bgrf5HQryvI9W50bybW7-zAo7JOJwyVF_S67Z6yJmyXtRz79TAa5avIXzt3VsLGb7AWJSn8yywbieorCYNRlIogedSSU7pL4zTF0myJAV6Jk-gu5g" />
-                        </div>
-                        <div class="contact-item__info">
-                            <span class="contact-item__name">Amara Okafor</span>
-                            <span class="contact-item__email">amara.oka@stream.io</span>
-                        </div>
-                    </div>
-                    <div class="contact-item__right">
-                        <span class="contact-item__status-label contact-item__status-label--online">Online</span>
-                        <div class="contact-item__dot contact-item__dot--online"></div>
-                    </div>
-                </a>
-
-                <!-- David Chen -->
-                <a class="contact-item" href="chat.html">
-                    <div class="contact-item__left">
-                        <div class="contact-item__avatar">
-                            <img alt="David Chen" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDrGUF0ZXw4VSmgDGtYXFUzGWt7ZAUwi6GGrF2eA3v8sr7Om07DEkAbZGVbYGUf76EaOuNZdSZowG0eQanHiVZecvUBqSedX3v2Jiesfllp4xPOi8ztRs-T7Hilf11YSS7972ScW1wWpNN50fCgW0ZtKwM6Mvn0Ri67Gitq9aEJVyTKdNiBQSpR2Nb-vlkH82B4pJHhXFzkm4pFcluHaG_vyphI9TgQvA-q2vfyMIo1a0cLz8H0YKokWutCzsBYyc_8RFiKo7assLs" />
-                        </div>
-                        <div class="contact-item__info">
-                            <span class="contact-item__name">David Chen</span>
-                            <span class="contact-item__email">d.chen@nexus.com</span>
-                        </div>
-                    </div>
-                    <div class="contact-item__right">
-                        <span class="contact-item__status-label contact-item__status-label--offline">Offline</span>
-                        <div class="contact-item__dot contact-item__dot--offline"></div>
-                    </div>
-                </a>
-
-                <!-- Lara Hamilton -->
-                <a class="contact-item" href="chat.html">
-                    <div class="contact-item__left">
-                        <div class="contact-item__avatar contact-item__avatar--initials">
-                            LH
-                        </div>
-                        <div class="contact-item__info">
-                            <span class="contact-item__name">Lara Hamilton</span>
-                            <span class="contact-item__email">lara.h@pulse.app</span>
-                        </div>
-                    </div>
-                    <div class="contact-item__right">
-                        <span class="contact-item__status-label contact-item__status-label--online">Online</span>
-                        <div class="contact-item__dot contact-item__dot--online"></div>
-                    </div>
-                </a>
+                <!-- Filled by JS -->
             </div>
         </section>
+
+        <button class="logout-btn" id="logoutBtn">Logout</button>
     </main>
 
-    <!-- Floating Action Button -->
-    <button class="fab" aria-label="Add new contact">
-        <span class="material-symbols-outlined">person_add</span>
-    </button>
-
-    <!-- Bottom Navigation -->
+    <!-- Bottom Nav -->
     <nav class="bottom-nav">
-        <a class="nav-item nav-item--inactive" href="chat.html" aria-label="Chats">
+        <a class="nav-item nav-item--inactive" href="visitor.html" aria-label="Chats">
             <span class="material-symbols-outlined">chat_bubble</span>
         </a>
         <a class="nav-item nav-item--active" href="contacts.html" aria-label="Contacts">
             <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">contacts</span>
         </a>
-        <a class="nav-item nav-item--inactive" href="#" aria-label="Settings">
-            <span class="material-symbols-outlined">settings</span>
-        </a>
     </nav>
 
+    <script src="api.js"></script>
     <script>
-        // Live Search Filter
-        const searchInput = document.getElementById('searchInput');
-        const contactsList = document.getElementById('contactsList');
-        const contacts = contactsList.querySelectorAll('.contact-item');
+        // Require login
+        if (!NChat.Visitor.isLoggedIn()) {
+            window.location.href = 'login.html';
+        }
 
+        const contactsList = document.getElementById('contactsList');
+        const searchInput = document.getElementById('searchInput');
+        const searchResults = document.getElementById('searchResults');
+        let searchTimeout = null;
+
+        // ── Init ──
+        async function init() {
+            // Set user info in topbar
+            const info = NChat.Visitor.getInfo();
+            if (info) {
+                document.getElementById('myAvatar').textContent = (info.name || info.username || '?').charAt(0).toUpperCase();
+                document.getElementById('myUsername').textContent = '@' + (info.username || 'user');
+            }
+
+            await loadContacts();
+        }
+
+        // ── Load Contacts ──
+        async function loadContacts() {
+            try {
+                const data = await NChat.Visitor.getContacts();
+                renderContacts(data.contacts || []);
+            } catch (err) {
+                console.error('Load contacts error:', err);
+                contactsList.innerHTML = '<div class="empty-state"><div class="empty-state__icon"><span class="material-symbols-outlined" style="font-size:3rem;">error</span></div><div class="empty-state__title">Could not load contacts</div></div>';
+            }
+        }
+
+        function renderContacts(contacts) {
+            if (contacts.length === 0) {
+                contactsList.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state__icon"><span class="material-symbols-outlined" style="font-size:3rem;">forum</span></div>
+                        <div class="empty-state__title">No conversations yet</div>
+                        <div class="empty-state__sub">Search for users by username to start chatting!</div>
+                    </div>
+                `;
+                return;
+            }
+
+            contactsList.innerHTML = contacts.map(c => {
+                const other = c.other;
+                if (!other) return '';
+                const isAdmin = other.type === 'admin';
+                const initial = (other.name || other.username || '?').charAt(0).toUpperCase();
+                const avatarClass = isAdmin ? 'contact-item__avatar--admin' : 'contact-item__avatar--visitor';
+                const chatLink = isAdmin ? 'visitor.html' : `chat.html?conversation=${c.conversation_id}`;
+                const lastMsg = c.last_message ? c.last_message.body : 'No messages yet';
+                const lastTime = c.last_message ? c.last_message.time : '';
+                const badge = c.unread_count > 0 ? `<span class="contact-item__badge">${c.unread_count}</span>` : '';
+                const onlineClass = other.is_online ? 'online' : 'offline';
+
+                return `
+                    <a class="contact-item" href="${chatLink}">
+                        <div class="contact-item__avatar-wrap">
+                            <div class="contact-item__avatar ${avatarClass}">${initial}</div>
+                            <span class="contact-item__status-dot ${onlineClass}"></span>
+                        </div>
+                        <div class="contact-item__body">
+                            <div class="contact-item__top">
+                                <span class="contact-item__name">${other.name}${isAdmin ? ' ⭐' : ''}</span>
+                                <span class="contact-item__time">${lastTime}</span>
+                            </div>
+                            <div class="contact-item__bottom">
+                                <span class="contact-item__preview">${lastMsg}</span>
+                                ${badge}
+                            </div>
+                        </div>
+                    </a>
+                `;
+            }).join('');
+        }
+
+        // ── Search Users ──
         searchInput.addEventListener('input', () => {
-            const query = searchInput.value.toLowerCase().trim();
-            contacts.forEach(contact => {
-                const name = contact.querySelector('.contact-item__name').textContent.toLowerCase();
-                const email = contact.querySelector('.contact-item__email').textContent.toLowerCase();
-                if (name.includes(query) || email.includes(query)) {
-                    contact.style.display = '';
-                    contact.style.animation = 'fadeIn 0.3s ease';
-                } else {
-                    contact.style.display = 'none';
+            clearTimeout(searchTimeout);
+            const q = searchInput.value.trim();
+            if (q.length < 2) {
+                searchResults.classList.remove('show');
+                searchResults.innerHTML = '';
+                return;
+            }
+            searchTimeout = setTimeout(async () => {
+                try {
+                    const data = await NChat.Visitor.searchUsers(q);
+                    if (data.users && data.users.length > 0) {
+                        searchResults.innerHTML = data.users.map(u => `
+                            <div class="search-result-item" data-username="${u.username}">
+                                <div class="search-result-item__avatar">${(u.name || u.username).charAt(0).toUpperCase()}</div>
+                                <div class="search-result-item__info">
+                                    <div class="search-result-item__name">${u.name}</div>
+                                    <div class="search-result-item__user">@${u.username}</div>
+                                </div>
+                                <span class="search-result-item__action">Chat</span>
+                            </div>
+                        `).join('');
+                        searchResults.classList.add('show');
+
+                        // Add click handlers
+                        searchResults.querySelectorAll('.search-result-item').forEach(el => {
+                            el.addEventListener('click', async () => {
+                                const username = el.dataset.username;
+                                try {
+                                    const data = await NChat.Visitor.startChat(username);
+                                    window.location.href = `chat.html?conversation=${data.conversation_id}`;
+                                } catch (err) {
+                                    console.error('Start chat error:', err);
+                                }
+                            });
+                        });
+                    } else {
+                        searchResults.innerHTML = '<div class="search-no-results">No users found</div>';
+                        searchResults.classList.add('show');
+                    }
+                } catch (err) {
+                    console.error('Search error:', err);
                 }
-            });
+            }, 300);
         });
+
+        // Close search on blur
+        searchInput.addEventListener('blur', () => {
+            setTimeout(() => searchResults.classList.remove('show'), 200);
+        });
+
+        // ── Logout ──
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            NChat.Visitor.clearToken();
+            window.location.href = 'visitor.html';
+        });
+
+        // ── Refresh contacts periodically ──
+        setInterval(loadContacts, 5000);
+
+        init();
     </script>
 </body>
 </html>

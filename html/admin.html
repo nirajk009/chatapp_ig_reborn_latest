@@ -302,6 +302,8 @@
         let conversations = [];
         let activeVisitorId = null;
         let searchQuery = '';
+        const renderedMsgIds = new Set(); // dedup: tracks rendered message IDs in active chat
+        let isSending = false;            // send lock
 
         // ── DOM ──
         const convList = document.getElementById('convList');
@@ -336,8 +338,10 @@
             const filtered = conversations.filter(c => {
                 if (!searchQuery) return true;
                 const q = searchQuery.toLowerCase();
-                return (c.name && c.name.toLowerCase().includes(q)) ||
-                       (c.email && c.email.toLowerCase().includes(q));
+                const v = c.visitor || {};
+                return (v.name && v.name.toLowerCase().includes(q)) ||
+                       (v.email && v.email.toLowerCase().includes(q)) ||
+                       (v.username && v.username.toLowerCase().includes(q));
             });
 
             // Keep empty sidebar or render list
@@ -352,12 +356,15 @@
 
             let totalUnread = 0;
             filtered.forEach(c => {
+                const v = c.visitor || {};
+                const visitorId = v.id;
                 totalUnread += c.unread_count || 0;
                 const el = document.createElement('div');
-                el.className = `conv-item${activeVisitorId === c.id ? ' active' : ''}`;
-                el.dataset.id = c.id;
+                el.className = `conv-item${activeVisitorId === visitorId ? ' active' : ''}`;
+                el.dataset.id = visitorId;
 
-                const initials = (c.name || 'V').split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
+                const displayName = v.name || v.username || 'Visitor #' + visitorId;
+                const initials = displayName.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
                 const preview = c.last_message
                     ? (c.last_message.sender_type === 'admin' ? 'You: ' : '') + c.last_message.body
                     : 'No messages yet';
@@ -366,10 +373,10 @@
                 el.innerHTML = `
                     <div class="conv-avatar">
                         ${initials}
-                        <div class="conv-avatar__status ${c.is_online ? 'online' : ''}"></div>
+                        <div class="conv-avatar__status ${v.is_online ? 'online' : ''}"></div>
                     </div>
                     <div class="conv-info">
-                        <div class="conv-name">${c.name || 'Visitor #' + c.id}</div>
+                        <div class="conv-name">${displayName}${v.username ? ' <span style="font-weight:500;font-size:0.7rem;color:var(--on-surface-variant);">@' + v.username + '</span>' : ''}</div>
                         <div class="conv-preview">${preview}</div>
                     </div>
                     <div class="conv-meta">
@@ -378,7 +385,7 @@
                     </div>
                 `;
 
-                el.addEventListener('click', () => openChat(c.id));
+                el.addEventListener('click', () => openChat(visitorId));
                 convList.appendChild(el);
             });
 
@@ -397,6 +404,7 @@
         async function openChat(visitorId) {
             activeVisitorId = visitorId;
             NChat.Admin.stopConversationPolling();
+            renderedMsgIds.clear(); // clear dedup set for new conversation
 
             // Update UI
             chatEmpty.style.display = 'none';
@@ -427,8 +435,11 @@
 
                 // Start polling this conversation
                 NChat.Admin.startConversationPolling(visitorId, (msgs, online) => {
-                    msgs.forEach(m => appendChatMessage(m));
-                    scrollChatToBottom();
+                    let added = false;
+                    msgs.forEach(m => {
+                        if (appendChatMessage(m)) added = true;
+                    });
+                    if (added) scrollChatToBottom();
 
                     chatStatus.textContent = online ? 'online' : 'offline';
                     chatStatus.className = `chat-panel__status ${online ? 'online' : ''}`;
@@ -443,6 +454,10 @@
         }
 
         function appendChatMessage(msg) {
+            // Dedup: skip if already rendered
+            if (renderedMsgIds.has(msg.id)) return false;
+            renderedMsgIds.add(msg.id);
+
             const isSent = msg.sender_type === 'admin';
             const group = document.createElement('div');
             group.className = `msg-group msg-group--${isSent ? 'sent' : 'received'}`;
@@ -458,6 +473,7 @@
             group.appendChild(bubble);
             group.appendChild(ts);
             chatMessages.appendChild(group);
+            return true;
         }
 
         function addDayDivider(label) {
@@ -474,23 +490,31 @@
         // ── Send Message (Admin) ──
         async function adminSend() {
             const text = chatInput.value.trim();
-            if (!text || !activeVisitorId) return;
+            if (!text || !activeVisitorId || isSending) return;
 
+            isSending = true;
             chatInput.value = '';
 
-            // Optimistic
+            // Optimistic with temp ID
+            const tempId = 'temp_' + Date.now();
             const temp = {
-                id: Date.now(), sender_type: 'admin', body: text,
+                id: tempId, sender_type: 'admin', body: text,
                 time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
             };
             appendChatMessage(temp);
             scrollChatToBottom();
 
             try {
-                await NChat.Admin.sendMessage(activeVisitorId, text);
+                const result = await NChat.Admin.sendMessage(activeVisitorId, text);
+                // Register real server ID so polling skips it
+                if (result.message) {
+                    renderedMsgIds.add(result.message.id);
+                }
                 loadConversations();
             } catch (err) {
                 console.error('Send error:', err);
+            } finally {
+                isSending = false;
             }
         }
 
@@ -522,10 +546,8 @@
 
         // ── Global Polling (for new conversation updates) ──
         NChat.Admin.startGlobalPolling((data) => {
-            if (data.total_unread !== undefined) {
-                // Refresh conversation list periodically
-                loadConversations();
-            }
+            // Refresh conversation list periodically
+            loadConversations();
         });
 
         // ── Boot ──

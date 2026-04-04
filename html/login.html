@@ -595,7 +595,13 @@
         <p class="copyright__text">© 2024 Velvet Pulse Systems</p>
     </footer>
 
+    <script src="api.js"></script>
     <script>
+        // If already logged in, redirect
+        if (NChat.Visitor.isLoggedIn()) {
+            window.location.href = 'contacts.html';
+        }
+
         // Password Toggle
         const toggleBtn = document.getElementById('togglePassword');
         const passwordInput = document.getElementById('password');
@@ -605,8 +611,8 @@
             toggleBtn.querySelector('.material-symbols-outlined').textContent = isPassword ? 'visibility' : 'visibility_off';
         });
 
-        // Form Validation
-        function handleLogin(e) {
+        // Form Validation & Login
+        async function handleLogin(e) {
             e.preventDefault();
             const email = document.getElementById('email');
             const password = document.getElementById('password');
@@ -614,7 +620,7 @@
             const passwordWrapper = document.getElementById('passwordWrapper');
             let valid = true;
 
-            // Reset
+            // Reset errors
             emailWrapper.classList.remove('input-wrapper--error');
             passwordWrapper.classList.remove('input-wrapper--error');
 
@@ -630,11 +636,23 @@
             if (valid) {
                 const btn = document.getElementById('loginBtn');
                 btn.classList.add('btn-primary--loading');
-                // Simulate login
-                setTimeout(() => {
+
+                try {
+                    const result = await NChat.Visitor.login(email.value, password.value);
+                    if (result.is_admin) {
+                        window.location.href = 'admin.html';
+                    } else {
+                        window.location.href = 'contacts.html';
+                    }
+                } catch (err) {
                     btn.classList.remove('btn-primary--loading');
-                    window.location.href = 'contacts.html';
-                }, 1500);
+                    // Show error
+                    const errEl = document.getElementById('emailError');
+                    if (errEl) {
+                        errEl.textContent = err.error || 'Invalid email or password';
+                        emailWrapper.classList.add('input-wrapper--error');
+                    }
+                }
             }
         }
     </script>

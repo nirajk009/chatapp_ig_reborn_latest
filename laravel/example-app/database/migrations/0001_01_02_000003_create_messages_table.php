@@ -10,14 +10,18 @@ return new class extends Migration
     {
         Schema::create('messages', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('visitor_id')->constrained()->onDelete('cascade');
-            $table->enum('sender_type', ['visitor', 'admin']);
+            $table->unsignedBigInteger('conversation_id');
+            $table->unsignedBigInteger('sender_id');
+            $table->string('sender_type'); // 'visitor' or 'admin'
             $table->text('body');
             $table->boolean('is_read')->default(false);
+            $table->string('client_id', 36)->nullable();
             $table->timestamps();
 
-            $table->index(['visitor_id', 'created_at']);
-            $table->index(['visitor_id', 'is_read']);
+            $table->index(['conversation_id', 'created_at']);
+            $table->index(['conversation_id', 'is_read']);
+            $table->unique(['conversation_id', 'client_id']);
+            $table->foreign('conversation_id')->references('id')->on('conversations')->onDelete('cascade');
         });
     }
 
