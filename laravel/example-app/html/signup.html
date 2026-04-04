@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>n-chat | Sign Up</title>
+    <meta name="description" content="Create your n-chat account - Join the digital pulse and connect beautifully." />
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+    <style>
+        /* ========================================
+           DESIGN SYSTEM: VELVET PULSE – SIGNUP
+           ======================================== */
+        :root {
+            --primary: #952cb1;
+            --primary-dim: #871ba4;
+            --primary-container: #f1a6ff;
+            --on-primary: #fff7fb;
+            --on-primary-container: #680082;
+            --secondary-container: #fed6ff;
+            --surface: #fff7fb;
+            --surface-container-low: #ffeffc;
+            --surface-container-high: #fedeff;
+            --surface-container-highest: #fdd6ff;
+            --on-surface: #45274b;
+            --on-surface-variant: #75547a;
+            --on-background: #45274b;
+            --outline: #926f97;
+            --outline-variant: #cca5d0;
+            --error: #ac3149;
+            --font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            --radius-full: 9999px;
+        }
+
+        *, *::before, *::after {
+            margin: 0; padding: 0; box-sizing: border-box;
+        }
+
+        html {
+            font-size: 16px;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background-color: var(--surface);
+            color: var(--on-surface);
+            min-height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        ::selection {
+            background: var(--primary-container);
+            color: var(--on-primary-container);
+        }
+
+        /* --- Decorative Blobs --- */
+        .bg-blob {
+            position: fixed;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 0;
+        }
+        .bg-blob--tr {
+            top: 15%;
+            right: -5rem;
+            width: 20rem;
+            height: 20rem;
+            background: rgba(241, 166, 255, 0.2);
+            filter: blur(100px);
+            animation: blobFloat 8s ease-in-out infinite alternate;
+        }
+        .bg-blob--bl {
+            bottom: 15%;
+            left: -5rem;
+            width: 16rem;
+            height: 16rem;
+            background: rgba(254, 214, 255, 0.3);
+            filter: blur(80px);
+            animation: blobFloat 10s ease-in-out infinite alternate-reverse;
+        }
+        @keyframes blobFloat {
+            0% { transform: scale(1) translateY(0); }
+            100% { transform: scale(1.08) translateY(-10px); }
+        }
+
+        /* --- Material Symbols --- */
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+
+        /* --- Top App Bar --- */
+        .topbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 50;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem 1.5rem;
+            background: rgba(255, 247, 251, 0.8);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+
+        .topbar__brand {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            text-decoration: none;
+        }
+
+        .topbar__brand .material-symbols-outlined {
+            font-size: 1.5rem;
+            color: var(--primary);
+        }
+
+        .topbar__brand-name {
+            font-size: 1.5rem;
+            font-weight: 900;
+            letter-spacing: -0.04em;
+            color: var(--primary);
+        }
+
+        .topbar__nav {
+            display: none;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .topbar__nav-link {
+            font-family: var(--font-family);
+            font-weight: 700;
+            font-size: 1rem;
+            letter-spacing: -0.01em;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: var(--radius-full);
+            transition: all 0.2s ease;
+        }
+
+        .topbar__nav-link--login {
+            color: var(--on-surface-variant);
+        }
+        .topbar__nav-link--login:hover {
+            background: rgba(254, 222, 255, 0.5);
+        }
+
+        .topbar__nav-link--signup {
+            color: var(--primary);
+        }
+        .topbar__nav-link--signup:hover {
+            background: rgba(254, 222, 255, 0.5);
+        }
+
+        @media (min-width: 768px) {
+            .topbar__nav { display: flex; }
+        }
+
+        /* --- Main Content --- */
+        .signup-main {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 6rem 1.5rem 8rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .signup-card {
+            width: 100%;
+            max-width: 420px;
+            display: flex;
+            flex-direction: column;
+            gap: 2.5rem;
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(24px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* --- Hero Heading --- */
+        .hero {
+            text-align: center;
+        }
+
+        .hero__title {
+            font-size: 2.75rem;
+            font-weight: 800;
+            line-height: 1.1;
+            letter-spacing: -0.03em;
+            color: var(--on-background);
+            margin-bottom: 0.75rem;
+        }
+
+        .hero__title em {
+            color: var(--primary);
+            font-style: italic;
+        }
+
+        .hero__subtitle {
+            color: var(--on-surface-variant);
+            font-weight: 500;
+            font-size: 0.95rem;
+        }
+
+        @media (min-width: 768px) {
+            .hero { text-align: left; }
+        }
+
+        /* --- Form --- */
+        .form {
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .input-group__label {
+            font-size: 0.6875rem;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            color: var(--on-surface-variant);
+            margin-left: 1rem;
+        }
+
+        .input-wrapper {
+            position: relative;
+        }
+
+        .input-wrapper__field {
+            width: 100%;
+            background: var(--surface-container-high);
+            border: none;
+            color: var(--on-surface);
+            padding: 1rem 3.5rem 1rem 1.5rem;
+            border-radius: var(--radius-full);
+            font-family: var(--font-family);
+            font-size: 0.95rem;
+            outline: none;
+            transition: all 0.3s ease;
+            border: 1.5px solid transparent;
+        }
+
+        .input-wrapper__field::placeholder {
+            color: var(--outline);
+        }
+
+        .input-wrapper__field:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(149, 44, 177, 0.1);
+            background: var(--surface);
+        }
+
+        .input-wrapper__icon {
+            position: absolute;
+            right: 1.25rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--outline);
+            font-size: 1.25rem;
+            transition: color 0.3s ease;
+            pointer-events: none;
+        }
+
+        .input-wrapper__field:focus ~ .input-wrapper__icon {
+            color: var(--primary);
+        }
+
+        /* Password toggle (reuses icon position) */
+        .password-toggle {
+            background: none;
+            border: none;
+            cursor: pointer;
+            position: absolute;
+            right: 1.25rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--outline);
+            display: flex;
+            align-items: center;
+            transition: color 0.3s ease;
+        }
+        .password-toggle:hover { color: var(--primary); }
+        .password-toggle .material-symbols-outlined { font-size: 1.25rem; }
+
+        /* Error state */
+        .input-wrapper--error .input-wrapper__field {
+            border-color: var(--error);
+            box-shadow: 0 0 0 3px rgba(172, 49, 73, 0.1);
+        }
+
+        .input-error-msg {
+            font-size: 0.75rem;
+            color: var(--error);
+            padding-left: 1rem;
+            display: none;
+        }
+
+        .input-wrapper--error ~ .input-error-msg {
+            display: block;
+        }
+
+        /* Password strength bar */
+        .password-strength {
+            height: 3px;
+            border-radius: 2px;
+            margin: 0.25rem 1rem 0;
+            background: rgba(204, 165, 208, 0.2);
+            overflow: hidden;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .password-strength--visible {
+            opacity: 1;
+        }
+
+        .password-strength__bar {
+            height: 100%;
+            border-radius: 2px;
+            width: 0%;
+            transition: all 0.4s ease;
+        }
+
+        .password-strength__bar--weak { width: 33%; background: var(--error); }
+        .password-strength__bar--medium { width: 66%; background: #e6a817; }
+        .password-strength__bar--strong { width: 100%; background: #3cb371; }
+
+        /* --- Submit Button --- */
+        .btn-primary {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            width: 100%;
+            padding: 1rem 1.5rem;
+            border: none;
+            border-radius: var(--radius-full);
+            background: linear-gradient(135deg, var(--primary), var(--primary-container));
+            color: var(--on-primary);
+            font-family: var(--font-family);
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 10px 30px rgba(149, 44, 177, 0.2);
+            transition: all 0.3s ease;
+            margin-top: 0.75rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-primary::before {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%;
+            width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+            transition: left 0.5s ease;
+        }
+
+        .btn-primary:hover {
+            box-shadow: 0 15px 40px rgba(149, 44, 177, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .btn-primary:hover::before { left: 100%; }
+
+        .btn-primary:active {
+            transform: scale(0.98);
+        }
+
+        .btn-primary .material-symbols-outlined {
+            font-size: 1.1rem;
+            transition: transform 0.3s ease;
+        }
+
+        .btn-primary:hover .material-symbols-outlined {
+            transform: translateX(3px);
+        }
+
+        /* Loading state */
+        .btn-primary--loading {
+            pointer-events: none;
+            opacity: 0.85;
+        }
+        .btn-primary--loading .btn-primary__content { visibility: hidden; }
+        .btn-primary--loading::after {
+            content: '';
+            position: absolute;
+            width: 1.25rem; height: 1.25rem;
+            border: 2.5px solid rgba(255, 247, 251, 0.3);
+            border-top-color: var(--on-primary);
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* --- Footer Link --- */
+        .footer-text {
+            text-align: center;
+            color: var(--on-surface-variant);
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        .footer-text a {
+            color: var(--primary);
+            font-weight: 700;
+            text-decoration: none;
+            margin-left: 0.25rem;
+            transition: all 0.2s ease;
+        }
+
+        .footer-text a:hover {
+            text-decoration: underline;
+            text-decoration-thickness: 2px;
+            text-underline-offset: 4px;
+        }
+
+        /* --- Bottom Nav (Mobile) --- */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 50;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            padding: 0.75rem 2rem 1.5rem;
+            background: var(--surface);
+            border-radius: 2.5rem 2.5rem 0 0;
+            box-shadow: 0 -4px 40px rgba(69, 39, 75, 0.04);
+        }
+
+        .bottom-nav__item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            padding: 0.5rem 1.5rem;
+            border-radius: var(--radius-full);
+            transition: all 0.3s ease;
+        }
+
+        .bottom-nav__item--inactive {
+            color: var(--on-surface-variant);
+        }
+        .bottom-nav__item--inactive:hover {
+            opacity: 0.8;
+        }
+
+        .bottom-nav__item--active {
+            background: var(--secondary-container);
+            color: var(--primary);
+        }
+
+        .bottom-nav__item .material-symbols-outlined {
+            font-size: 1.5rem;
+            margin-bottom: 0.15rem;
+        }
+
+        .bottom-nav__label {
+            font-family: var(--font-family);
+            font-size: 0.6875rem;
+            font-weight: 500;
+            letter-spacing: 0.02em;
+        }
+
+        @media (min-width: 768px) {
+            .bottom-nav { display: none; }
+        }
+
+        /* --- Responsive --- */
+        @media (max-width: 480px) {
+            .hero__title { font-size: 2.25rem; }
+            .signup-main { padding-top: 5rem; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Background blobs -->
+    <div class="bg-blob bg-blob--tr"></div>
+    <div class="bg-blob bg-blob--bl"></div>
+
+    <!-- Top App Bar -->
+    <header class="topbar">
+        <a class="topbar__brand" href="login.html">
+            <span class="material-symbols-outlined">bubble_chart</span>
+            <span class="topbar__brand-name">n-chat</span>
+        </a>
+        <nav class="topbar__nav">
+            <a class="topbar__nav-link topbar__nav-link--login" href="login.html">Login</a>
+            <a class="topbar__nav-link topbar__nav-link--signup" href="signup.html">Signup</a>
+        </nav>
+    </header>
+
+    <!-- Main Content -->
+    <main class="signup-main">
+        <div class="signup-card">
+            <!-- Hero -->
+            <div class="hero">
+                <h1 class="hero__title">
+                    Start something <em>new.</em>
+                </h1>
+                <p class="hero__subtitle">Join the digital pulse and connect beautifully.</p>
+            </div>
+
+            <!-- Signup Form -->
+            <form class="form" id="signupForm" onsubmit="return handleSignup(event)">
+                <!-- Username -->
+                <div class="input-group">
+                    <label class="input-group__label" for="username">Username</label>
+                    <div class="input-wrapper" id="usernameWrapper">
+                        <input
+                            class="input-wrapper__field"
+                            id="username"
+                            type="text"
+                            placeholder="alex_rivera"
+                            autocomplete="username"
+                            required
+                            minlength="3"
+                            maxlength="30"
+                            pattern="[a-zA-Z0-9_]+"
+                        />
+                        <span class="material-symbols-outlined input-wrapper__icon">alternate_email</span>
+                    </div>
+                    <span class="input-error-msg" id="usernameError">Letters, numbers, underscores only (3-30 chars)</span>
+                </div>
+
+                <!-- Full Name -->
+                <div class="input-group">
+                    <label class="input-group__label" for="fullname">Full Name</label>
+                    <div class="input-wrapper" id="nameWrapper">
+                        <input
+                            class="input-wrapper__field"
+                            id="fullname"
+                            type="text"
+                            placeholder="Alex Rivera"
+                            autocomplete="name"
+                            required
+                        />
+                        <span class="material-symbols-outlined input-wrapper__icon">person</span>
+                    </div>
+                    <span class="input-error-msg" id="nameError">Please enter your full name</span>
+                </div>
+
+                <!-- Email -->
+                <div class="input-group">
+                    <label class="input-group__label" for="email">Email Address</label>
+                    <div class="input-wrapper" id="emailWrapper">
+                        <input
+                            class="input-wrapper__field"
+                            id="email"
+                            type="email"
+                            placeholder="alex@n-chat.io"
+                            autocomplete="email"
+                            required
+                        />
+                        <span class="material-symbols-outlined input-wrapper__icon">mail</span>
+                    </div>
+                    <span class="input-error-msg" id="emailError">Please enter a valid email address</span>
+                </div>
+
+                <!-- Password -->
+                <div class="input-group">
+                    <label class="input-group__label" for="password">Password</label>
+                    <div class="input-wrapper" id="passwordWrapper">
+                        <input
+                            class="input-wrapper__field"
+                            id="password"
+                            type="password"
+                            placeholder="••••••••"
+                            autocomplete="new-password"
+                            required
+                            minlength="6"
+                        />
+                        <button type="button" class="password-toggle" id="togglePassword" aria-label="Toggle password visibility">
+                            <span class="material-symbols-outlined">visibility_off</span>
+                        </button>
+                    </div>
+                    <div class="password-strength" id="strengthMeter">
+                        <div class="password-strength__bar" id="strengthBar"></div>
+                    </div>
+                    <span class="input-error-msg" id="passwordError">Password must be at least 6 characters</span>
+                </div>
+
+                <!-- Submit -->
+                <button class="btn-primary" type="submit" id="signupBtn">
+                    <span class="btn-primary__content">
+                        Sign Up
+                        <span class="material-symbols-outlined">arrow_forward</span>
+                    </span>
+                </button>
+            </form>
+
+            <!-- Login Link -->
+            <p class="footer-text">
+                Already have an account? <a href="login.html">Log in</a>
+            </p>
+        </div>
+    </main>
+
+    <!-- Bottom Nav (Mobile) -->
+    <nav class="bottom-nav">
+        <a class="bottom-nav__item bottom-nav__item--inactive" href="login.html">
+            <span class="material-symbols-outlined">login</span>
+            <span class="bottom-nav__label">Login</span>
+        </a>
+        <a class="bottom-nav__item bottom-nav__item--active" href="signup.html">
+            <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">person_add</span>
+            <span class="bottom-nav__label">Signup</span>
+        </a>
+    </nav>
+
+    <script src="api.js"></script>
+    <script>
+        // If already logged in, redirect
+        if (NChat.Visitor.isLoggedIn()) {
+            window.location.href = 'contacts.html';
+        }
+
+        // Password Toggle
+        const toggleBtn = document.getElementById('togglePassword');
+        const passwordInput = document.getElementById('password');
+        toggleBtn.addEventListener('click', () => {
+            const isPassword = passwordInput.type === 'password';
+            passwordInput.type = isPassword ? 'text' : 'password';
+            toggleBtn.querySelector('.material-symbols-outlined').textContent = isPassword ? 'visibility' : 'visibility_off';
+        });
+
+        // Password Strength Meter
+        passwordInput.addEventListener('input', () => {
+            const val = passwordInput.value;
+            const meter = document.getElementById('strengthMeter');
+            const bar = document.getElementById('strengthBar');
+
+            if (val.length === 0) {
+                meter.classList.remove('password-strength--visible');
+                bar.className = 'password-strength__bar';
+                return;
+            }
+
+            meter.classList.add('password-strength--visible');
+
+            let strength = 0;
+            if (val.length >= 6) strength++;
+            if (val.length >= 10) strength++;
+            if (/[A-Z]/.test(val) && /[0-9]/.test(val)) strength++;
+            if (/[^A-Za-z0-9]/.test(val)) strength++;
+
+            bar.className = 'password-strength__bar';
+            if (strength <= 1) bar.classList.add('password-strength__bar--weak');
+            else if (strength <= 2) bar.classList.add('password-strength__bar--medium');
+            else bar.classList.add('password-strength__bar--strong');
+        });
+
+        // Form Validation & Signup
+        async function handleSignup(e) {
+            e.preventDefault();
+            const username = document.getElementById('username');
+            const name = document.getElementById('fullname');
+            const email = document.getElementById('email');
+            const password = document.getElementById('password');
+            let valid = true;
+
+            // Reset
+            ['usernameWrapper', 'nameWrapper', 'emailWrapper', 'passwordWrapper'].forEach(id => {
+                document.getElementById(id).classList.remove('input-wrapper--error');
+            });
+
+            if (!username.value.trim() || username.value.length < 3 || !/^[a-zA-Z0-9_]+$/.test(username.value)) {
+                document.getElementById('usernameWrapper').classList.add('input-wrapper--error');
+                valid = false;
+            }
+            if (!name.value.trim()) {
+                document.getElementById('nameWrapper').classList.add('input-wrapper--error');
+                valid = false;
+            }
+            if (!email.value || !email.validity.valid) {
+                document.getElementById('emailWrapper').classList.add('input-wrapper--error');
+                valid = false;
+            }
+            if (!password.value || password.value.length < 6) {
+                document.getElementById('passwordWrapper').classList.add('input-wrapper--error');
+                valid = false;
+            }
+
+            if (valid) {
+                const btn = document.getElementById('signupBtn');
+                btn.classList.add('btn-primary--loading');
+
+                try {
+                    await NChat.Visitor.signup(name.value.trim(), email.value, password.value, username.value.trim());
+                    window.location.href = 'contacts.html';
+                } catch (err) {
+                    btn.classList.remove('btn-primary--loading');
+                    const errorMsg = err.error || 'Signup failed. Please try again.';
+                    // Show relevant error
+                    if (errorMsg.toLowerCase().includes('email')) {
+                        document.getElementById('emailError').textContent = errorMsg;
+                        document.getElementById('emailWrapper').classList.add('input-wrapper--error');
+                    } else if (errorMsg.toLowerCase().includes('username')) {
+                        document.getElementById('usernameError').textContent = errorMsg;
+                        document.getElementById('usernameWrapper').classList.add('input-wrapper--error');
+                    } else {
+                        document.getElementById('nameError').textContent = errorMsg;
+                        document.getElementById('nameWrapper').classList.add('input-wrapper--error');
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+</html>

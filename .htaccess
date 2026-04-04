@@ -1,0 +1,22 @@
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Default entry point for the chat UI.
+    RewriteRule ^$ html/visitor.html [L]
+
+    # Allow root-level access to frontend files that physically live in /html.
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{DOCUMENT_ROOT}/html/$1 -f
+    RewriteRule ^(.+)$ html/$1 [L]
+
+    # Expose Laravel public assets from the nested app.
+    RewriteRule ^storage/(.*)$ laravel/example-app/public/storage/$1 [L]
+    RewriteRule ^favicon\.ico$ laravel/example-app/public/favicon.ico [L]
+    RewriteRule ^robots\.txt$ laravel/example-app/public/robots.txt [L]
+
+    # Send API and Laravel entry routes into the nested public front controller.
+    RewriteRule ^(api|sanctum)(/.*)?$ laravel/example-app/public/index.php [QSA,L]
+</IfModule>

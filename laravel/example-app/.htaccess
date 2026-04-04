@@ -1,0 +1,37 @@
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Force HTTPS on shared hosting once SSL is installed.
+    RewriteCond %{HTTPS} !=on
+    RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+    # Preserve auth headers for Laravel API requests.
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+    RewriteCond %{HTTP:x-xsrf-token} .
+    RewriteRule .* - [E=HTTP_X_XSRF_TOKEN:%{HTTP:X-XSRF-Token}]
+
+    # Default app entry point.
+    RewriteRule ^$ html/visitor.html [L]
+
+    # Frontend files live in /html but should be accessible from the site root.
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{DOCUMENT_ROOT}/html/$1 -f
+    RewriteRule ^(.+)$ html/$1 [L]
+
+    # Public assets exposed from Laravel's public directory.
+    RewriteRule ^storage/(.*)$ public/storage/$1 [L]
+    RewriteRule ^favicon\.ico$ public/favicon.ico [L]
+    RewriteRule ^robots\.txt$ public/robots.txt [L]
+
+    # Route API requests into Laravel's front controller.
+    RewriteRule ^(api|sanctum)(/.*)?$ public/index.php [QSA,L]
+</IfModule>
+
+<IfModule !mod_rewrite.c>
+    DirectoryIndex html/visitor.html public/index.php
+</IfModule>

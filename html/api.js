@@ -1,5 +1,19 @@
 const NChat = (() => {
-    const API_BASE = 'http://localhost:8080/api';
+    function appBaseUrl() {
+        if (window.location.protocol === 'file:') {
+            return 'http://localhost:8080';
+        }
+
+        const path = window.location.pathname || '/';
+        const directory = path.replace(/\/[^/]*$/, '');
+        const basePath = directory.endsWith('/html')
+            ? directory.slice(0, -5)
+            : directory;
+
+        return `${window.location.origin}${basePath || ''}`;
+    }
+
+    const API_BASE = `${appBaseUrl()}/api`;
     const REALTIME = {
         key: '16fd173f2dd3ebb99caa',
         cluster: 'ap2',
