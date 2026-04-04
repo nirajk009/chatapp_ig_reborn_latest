@@ -175,6 +175,22 @@
         }
         .timestamp { font-size: 0.575rem; font-weight: 500; color: rgba(117,84,122,0.5); }
 
+        .typing-indicator {
+            display: none; align-items: center; gap: 0.3rem; max-width: 80%;
+            padding: 0.65rem 0.95rem; font-size: 0.75rem; color: var(--on-surface-variant);
+            background: var(--surface-container-highest); border-radius: 1.1rem; border-bottom-left-radius: 0.3rem;
+            align-self: flex-start;
+        }
+        .typing-indicator.show { display: flex; }
+        .typing-indicator__dot {
+            width: 0.35rem; height: 0.35rem; border-radius: 50%; background: var(--on-surface-variant);
+            animation: typingPulse 1.1s ease-in-out infinite;
+        }
+        .typing-indicator__dot:nth-child(2) { animation-delay: 0.15s; }
+        .typing-indicator__dot:nth-child(3) { animation-delay: 0.3s; }
+        .typing-indicator__text { margin-left: 0.25rem; }
+        @keyframes typingPulse { 0%, 60%, 100% { opacity: 0.25; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
+
         .chat-input {
             padding: 0.5rem 0.75rem 0.75rem; border-top: 1px solid rgba(204,165,208,0.06);
             background: rgba(255,247,251,0.92); backdrop-filter: blur(16px);
@@ -279,6 +295,12 @@
                     </div>
                 </div>
                 <div class="chat-messages" id="chatMessages"></div>
+                <div class="typing-indicator" id="typingIndicator">
+                    <span class="typing-indicator__dot"></span>
+                    <span class="typing-indicator__dot"></span>
+                    <span class="typing-indicator__dot"></span>
+                    <span class="typing-indicator__text" id="typingText">Visitor is typing...</span>
+                </div>
                 <div class="chat-input">
                     <div class="chat-input__inner">
                         <input class="chat-input__field" id="chatInput" type="text" placeholder="Write a reply..." autocomplete="off" />
@@ -322,6 +344,16 @@
         const chatStatus = document.getElementById('chatStatus');
         const totalBadge = document.getElementById('totalBadge');
         const searchInput = document.getElementById('searchInput');
+        const typingIndicator = document.getElementById('typingIndicator');
+        const typingText = document.getElementById('typingText');
+        const pendingMessages = new Map();
+        let activeVisitorOnline = false;
+        let activeVisitorTyping = false;
+        let remoteTypingTimer = null;
+        let localTypingTimer = null;
+        let typingSent = false;
+        const TYPING_KEEPALIVE_MS = 1200;
+        const TYPING_REMOTE_TIMEOUT_MS = 2600;
 
         function isVisitorOnline(visitorId, fallback = false) {
             if (!visitorId) {
@@ -338,6 +370,64 @@
             }
 
             return members.some(member => String(member.id) === memberId);
+        }
+
+        function nextClientId() {
+            if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+                return window.crypto.randomUUID();
+            }
+
+            return `msg-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`.slice(0, 36);
+        }
+
+        function createPendingMessage(clientId, body) {
+            const group = document.createElement('div');
+            group.className = 'msg-group msg-group--sent';
+            group.dataset.clientId = clientId;
+            group.dataset.pending = 'true';
+
+            const bubble = document.createElement('div');
+            bubble.className = 'bubble bubble--sent';
+            bubble.textContent = body;
+
+            const ts = document.createElement('span');
+            ts.className = 'timestamp';
+            ts.textContent = 'sending...';
+
+            group.appendChild(bubble);
+            group.appendChild(ts);
+            chatMessages.appendChild(group);
+            pendingMessages.set(clientId, group);
+            return group;
+        }
+
+        function resolvePendingMessage(msg) {
+            if (!msg || !msg.client_id) {
+                return false;
+            }
+
+            const group = pendingMessages.get(msg.client_id);
+            if (!group) {
+                return false;
+            }
+
+            const bubble = group.querySelector('.bubble');
+            const ts = group.querySelector('.timestamp');
+
+            group.dataset.id = String(msg.id);
+            delete group.dataset.pending;
+
+            if (bubble) {
+                bubble.textContent = msg.body;
+            }
+
+            if (ts) {
+                ts.textContent = msg.time || '';
+            }
+
+            renderedMsgIds.add(msg.id);
+            pendingMessages.delete(msg.client_id);
+            return true;
         }
 
         function applyPresenceToConversations(items) {
@@ -364,6 +454,10 @@
 
             if (activeVisitorId) {
                 updateActiveVisitorStatus(isVisitorOnline(activeVisitorId));
+                if (!isVisitorOnline(activeVisitorId)) {
+                    clearRemoteTypingTimer();
+                    hideTypingIndicator();
+                }
             }
         }
 
@@ -448,8 +542,111 @@
         }
 
         function updateActiveVisitorStatus(isOnline) {
-            chatStatus.textContent = isOnline ? 'online' : 'offline';
-            chatStatus.className = `chat-panel__status ${isOnline ? 'online' : ''}`;
+            activeVisitorOnline = !!isOnline;
+            renderActiveVisitorStatus();
+        }
+
+        function renderActiveVisitorStatus() {
+            const statusActive = activeVisitorOnline || activeVisitorTyping;
+            chatStatus.textContent = activeVisitorTyping ? 'typing...' : (activeVisitorOnline ? 'online' : 'offline');
+            chatStatus.className = `chat-panel__status ${statusActive ? 'online' : ''}`;
+        }
+
+        function showTypingIndicator(name) {
+            if (name) {
+                typingText.textContent = `${name} is typing...`;
+            }
+
+            activeVisitorTyping = true;
+            typingIndicator.classList.add('show');
+            renderActiveVisitorStatus();
+            scrollChatToBottom();
+        }
+
+        function hideTypingIndicator() {
+            activeVisitorTyping = false;
+            typingIndicator.classList.remove('show');
+            renderActiveVisitorStatus();
+        }
+
+        function clearRemoteTypingTimer() {
+            if (remoteTypingTimer) {
+                clearTimeout(remoteTypingTimer);
+                remoteTypingTimer = null;
+            }
+        }
+
+        function scheduleRemoteTypingClear() {
+            clearRemoteTypingTimer();
+            remoteTypingTimer = setTimeout(() => {
+                hideTypingIndicator();
+            }, TYPING_REMOTE_TIMEOUT_MS);
+        }
+
+        function sendLocalTypingState(typing) {
+            if (!activeConversationId) {
+                return;
+            }
+
+            if (!typing) {
+                if (!typingSent) {
+                    return;
+                }
+
+                NChat.Admin.sendTyping(activeConversationId, false);
+                typingSent = false;
+                return;
+            }
+
+            NChat.Admin.sendTyping(activeConversationId, true);
+            typingSent = true;
+        }
+
+        function stopLocalTyping() {
+            if (localTypingTimer) {
+                clearInterval(localTypingTimer);
+                localTypingTimer = null;
+            }
+
+            sendLocalTypingState(false);
+        }
+
+        function handleTypingInput() {
+            if (!activeConversationId) {
+                return;
+            }
+
+            if (chatInput.value.trim().length === 0) {
+                stopLocalTyping();
+                return;
+            }
+
+            sendLocalTypingState(true);
+
+            if (!localTypingTimer) {
+                localTypingTimer = setInterval(() => {
+                    if (chatInput.value.trim().length === 0) {
+                        stopLocalTyping();
+                        return;
+                    }
+
+                    sendLocalTypingState(true);
+                }, TYPING_KEEPALIVE_MS);
+            }
+        }
+
+        function onTypingEvent(event) {
+            if (!event || event.sender_role !== 'visitor') {
+                return;
+            }
+
+            if (event.typing) {
+                showTypingIndicator(event.sender_name || 'Visitor');
+                scheduleRemoteTypingClear();
+            } else {
+                clearRemoteTypingTimer();
+                hideTypingIndicator();
+            }
         }
 
         function handleFeedMessage() {
@@ -462,6 +659,8 @@
 
             if (message && conversation && activeConversationId === conversation.id) {
                 if (appendChatMessage(message)) {
+                    clearRemoteTypingTimer();
+                    hideTypingIndicator();
                     if (message.sender_type === 'visitor' && activeVisitorId) {
                         NChat.Admin.markConversationRead(activeVisitorId)
                             .then(() => loadConversations())
@@ -477,6 +676,10 @@
             activeVisitorId = visitorId;
             activeConversationId = null;
             renderedMsgIds.clear();
+            pendingMessages.clear();
+            clearRemoteTypingTimer();
+            hideTypingIndicator();
+            stopLocalTyping();
             NChat.Admin.unsubscribeConversation();
 
             // Update UI
@@ -507,6 +710,7 @@
                 scrollChatToBottom();
                 await NChat.Admin.subscribeToConversation(activeConversationId, {
                     onMessage: handleConversationMessage,
+                    onTyping: onTypingEvent,
                 });
 
             } catch (err) {
@@ -515,6 +719,8 @@
         }
 
         function appendChatMessage(msg) {
+            if (resolvePendingMessage(msg)) return true;
+
             // Dedup: skip if already rendered
             if (renderedMsgIds.has(msg.id)) return false;
             renderedMsgIds.add(msg.id);
@@ -555,24 +761,27 @@
 
             isSending = true;
             chatInput.value = '';
+            stopLocalTyping();
 
-            // Optimistic with temp ID
-            const tempId = 'temp_' + Date.now();
-            const temp = {
-                id: tempId, sender_type: 'admin', body: text,
-                time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-            };
-            appendChatMessage(temp);
+            const clientId = nextClientId();
+            const pendingGroup = createPendingMessage(clientId, text);
             scrollChatToBottom();
 
             try {
-                const result = await NChat.Admin.sendMessage(activeVisitorId, text);
-                // Register real server ID so polling skips it
+                const result = await NChat.Admin.sendMessage(activeVisitorId, text, clientId);
                 if (result.message) {
-                    renderedMsgIds.add(result.message.id);
+                    resolvePendingMessage({
+                        ...result.message,
+                        client_id: result.message.client_id || result.client_id,
+                    });
                 }
                 loadConversations();
             } catch (err) {
+                pendingMessages.delete(clientId);
+                const ts = pendingGroup.querySelector('.timestamp');
+                if (ts) {
+                    ts.textContent = 'failed';
+                }
                 console.error('Send error:', err);
             } finally {
                 isSending = false;
@@ -583,12 +792,18 @@
         chatInput.addEventListener('keydown', e => {
             if (e.key === 'Enter') { e.preventDefault(); adminSend(); }
         });
+        chatInput.addEventListener('input', handleTypingInput);
+        chatInput.addEventListener('blur', stopLocalTyping);
 
         // ── Back button (mobile) ──
         document.getElementById('chatBack').addEventListener('click', () => {
             chatPanel.classList.remove('open');
             activeVisitorId = null;
             activeConversationId = null;
+            pendingMessages.clear();
+            stopLocalTyping();
+            clearRemoteTypingTimer();
+            hideTypingIndicator();
             NChat.Admin.unsubscribeConversation();
         });
 
@@ -613,6 +828,8 @@
             console.error('Realtime subscribe error:', err);
         });
         window.addEventListener('beforeunload', () => {
+            stopLocalTyping();
+            clearRemoteTypingTimer();
             NChat.Admin.disconnectRealtime();
         });
 

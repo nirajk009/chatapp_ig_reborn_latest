@@ -27,11 +27,13 @@ class AdminController extends Controller
     {
         return [
             'id' => $msg->id,
+            'client_id' => $msg->client_id,
             'conversation_id' => $msg->conversation_id,
             'sender_id' => $msg->sender_id,
             'sender_type' => $msg->sender_type,
             'body' => $msg->body,
             'is_read' => $msg->is_read,
+            'created_at' => $msg->created_at?->toIso8601String(),
             'time' => $msg->created_at->format('g:i A'),
         ];
     }
@@ -44,6 +46,17 @@ class AdminController extends Controller
                 'id' => $conversation->id,
                 'type' => $conversation->type,
             ],
+        ];
+    }
+
+    private function typingPayload(Admin $admin, Conversation $conversation, bool $typing): array
+    {
+        return [
+            'conversation_id' => $conversation->id,
+            'typing' => $typing,
+            'sender_role' => 'admin',
+            'sender_id' => $admin->id,
+            'sender_name' => $admin->name,
         ];
     }
 
@@ -113,6 +126,7 @@ class AdminController extends Controller
                     ],
                     'last_message' => $latest ? [
                         'body' => Str::limit($latest->body, 50),
+                        'created_at' => $latest->created_at?->toIso8601String(),
                         'time' => $latest->created_at->format('g:i A'),
                         'sender_type' => $latest->sender_type,
                     ] : null,
@@ -253,6 +267,29 @@ class AdminController extends Controller
 
             return response()->json(['error' => 'Realtime auth failed'], 503);
         }
+    }
+
+    public function typing(Request $request, int $visitorId, RealtimeService $realtime): JsonResponse
+    {
+        $admin = $this->resolveAdmin($request);
+        if (!$admin) return response()->json(['error' => 'Unauthorized'], 401);
+
+        $request->validate([
+            'typing' => 'required|boolean',
+            'socket_id' => 'nullable|string|max:50',
+        ]);
+
+        $visitor = Visitor::findOrFail($visitorId);
+        $conversation = Conversation::findOrCreateVisitorAdmin($visitor->id, $admin->id);
+        cache(['admin_last_poll' => now()], now()->addMinutes(1));
+
+        $realtime->publishTyping(
+            $conversation,
+            $this->typingPayload($admin, $conversation, (bool) $request->boolean('typing')),
+            $request->input('socket_id')
+        );
+
+        return response()->json(['status' => 'ok']);
     }
 
     // ─── Poll (global — for conversation list) ───

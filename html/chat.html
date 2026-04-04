@@ -91,6 +91,21 @@
         }
         .msg__time { font-size: 0.55rem; color: var(--on-surface-variant); margin-top: 0.2rem; padding: 0 0.5rem; }
 
+        .typing-indicator {
+            display: none; align-items: center; gap: 0.3rem; max-width: 80%;
+            padding: 0.75rem 1rem; border-radius: 1.25rem; border-bottom-left-radius: 0.25rem;
+            background: var(--surface-container-high); color: var(--on-surface-variant);
+        }
+        .typing-indicator.show { display: flex; }
+        .typing-indicator__dot {
+            width: 0.35rem; height: 0.35rem; border-radius: 50%; background: var(--on-surface-variant);
+            animation: pulseDot 1.1s ease-in-out infinite;
+        }
+        .typing-indicator__dot:nth-child(2) { animation-delay: 0.15s; }
+        .typing-indicator__dot:nth-child(3) { animation-delay: 0.3s; }
+        .typing-indicator__text { margin-left: 0.25rem; font-size: 0.75rem; }
+        @keyframes pulseDot { 0%, 60%, 100% { opacity: 0.25; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
+
         /* Input Bar */
         .input-bar {
             position: fixed; bottom: 0; left: 0; right: 0; z-index: 40;
@@ -138,7 +153,14 @@
         </div>
     </header>
 
-    <main class="chat-canvas" id="chatCanvas"></main>
+    <main class="chat-canvas" id="chatCanvas">
+        <div class="typing-indicator" id="typingIndicator">
+            <span class="typing-indicator__dot"></span>
+            <span class="typing-indicator__dot"></span>
+            <span class="typing-indicator__dot"></span>
+            <span class="typing-indicator__text" id="typingText">Typing...</span>
+        </div>
+    </main>
 
     <div class="input-bar">
         <div class="input-bar__inner">
@@ -166,14 +188,75 @@
         const chatCanvas = document.getElementById('chatCanvas');
         const messageInput = document.getElementById('messageInput');
         const sendBtn = document.getElementById('sendBtn');
+        const typingIndicator = document.getElementById('typingIndicator');
+        const typingText = document.getElementById('typingText');
         const renderedIds = new Set();
+        const pendingMessages = new Map();
         let myInfo = NChat.Visitor.getInfo();
         let otherInfo = null;
         let isSending = false;
+        let remoteOnline = false;
+        let remoteTyping = false;
+        let remoteTypingTimer = null;
+        let localTypingTimer = null;
+        let typingSent = false;
+        const TYPING_KEEPALIVE_MS = 1200;
+        const TYPING_REMOTE_TIMEOUT_MS = 2600;
 
         function hasMember(snapshot, memberId) {
             return Array.isArray(snapshot && snapshot.members)
                 && snapshot.members.some(member => String(member.id) === memberId);
+        }
+
+        function nextClientId() {
+            if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+                return window.crypto.randomUUID();
+            }
+
+            return `msg-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`.slice(0, 36);
+        }
+
+        function createPendingMessage(clientId, body) {
+            const div = document.createElement('div');
+            div.className = 'msg mine';
+            div.dataset.clientId = clientId;
+            div.dataset.pending = 'true';
+            div.innerHTML = `
+                <div class="msg__bubble">${escapeHtml(body)}</div>
+                <span class="msg__time">sending...</span>
+            `;
+            chatCanvas.insertBefore(div, typingIndicator);
+            pendingMessages.set(clientId, div);
+            return div;
+        }
+
+        function resolvePendingMessage(msg) {
+            if (!msg || !msg.client_id) {
+                return false;
+            }
+
+            const div = pendingMessages.get(msg.client_id);
+            if (!div) {
+                return false;
+            }
+
+            const bubble = div.querySelector('.msg__bubble');
+            const time = div.querySelector('.msg__time');
+
+            div.dataset.id = String(msg.id);
+            delete div.dataset.pending;
+
+            if (bubble) {
+                bubble.textContent = msg.body;
+            }
+
+            if (time) {
+                time.textContent = msg.time || '';
+            }
+
+            renderedIds.add(msg.id);
+            pendingMessages.delete(msg.client_id);
+            return true;
         }
 
         // ── Init ──
@@ -197,12 +280,16 @@
 
                 if (otherInfo && otherInfo.type === 'admin') {
                     await Promise.all([
-                        NChat.Visitor.subscribeToConversation(conversationId, { onMessage: onRealtimeMessage }),
+                        NChat.Visitor.subscribeToConversation(conversationId, {
+                            onMessage: onRealtimeMessage,
+                            onTyping: onTypingEvent,
+                        }),
                         NChat.Visitor.subscribeToAdminPresence(onAdminPresence, 'visitorChatAdminPresence'),
                     ]);
                 } else {
                     await NChat.Visitor.subscribeToConversation(conversationId, {
                         onMessage: onRealtimeMessage,
+                        onTyping: onTypingEvent,
                         onPresenceChange: onConversationPresence,
                     });
                 }
@@ -213,18 +300,21 @@
         }
 
         function updateOnlineStatus(isOnline) {
+            remoteOnline = !!isOnline;
             const dot = document.getElementById('statusDot');
             const text = document.getElementById('statusText');
             const status = document.getElementById('chatStatus');
-            if (isOnline) {
+            const statusActive = remoteOnline || remoteTyping;
+
+            if (statusActive) {
                 dot.classList.add('online');
-                text.textContent = 'online';
                 status.classList.add('online');
             } else {
                 dot.classList.remove('online');
-                text.textContent = 'offline';
                 status.classList.remove('online');
             }
+
+            text.textContent = remoteTyping ? 'typing...' : (remoteOnline ? 'online' : 'offline');
         }
 
         function onConversationPresence(snapshot) {
@@ -242,7 +332,102 @@
             );
         }
 
+        function showTypingIndicator(name) {
+            if (name) {
+                typingText.textContent = `${name} is typing...`;
+            }
+
+            remoteTyping = true;
+            typingIndicator.classList.add('show');
+            updateOnlineStatus(remoteOnline);
+            scrollToBottom();
+        }
+
+        function hideTypingIndicator() {
+            remoteTyping = false;
+            typingIndicator.classList.remove('show');
+            updateOnlineStatus(remoteOnline);
+        }
+
+        function clearRemoteTypingTimer() {
+            if (remoteTypingTimer) {
+                clearTimeout(remoteTypingTimer);
+                remoteTypingTimer = null;
+            }
+        }
+
+        function scheduleRemoteTypingClear() {
+            clearRemoteTypingTimer();
+            remoteTypingTimer = setTimeout(() => {
+                hideTypingIndicator();
+            }, TYPING_REMOTE_TIMEOUT_MS);
+        }
+
+        function sendLocalTypingState(typing) {
+            if (!conversationId) {
+                return;
+            }
+
+            if (!typing) {
+                if (!typingSent) {
+                    return;
+                }
+
+                NChat.Visitor.sendTyping(conversationId, false);
+                typingSent = false;
+                return;
+            }
+
+            NChat.Visitor.sendTyping(conversationId, true);
+            typingSent = true;
+        }
+
+        function stopLocalTyping() {
+            if (localTypingTimer) {
+                clearInterval(localTypingTimer);
+                localTypingTimer = null;
+            }
+
+            sendLocalTypingState(false);
+        }
+
+        function handleTypingInput() {
+            if (messageInput.value.trim().length === 0) {
+                stopLocalTyping();
+                return;
+            }
+
+            sendLocalTypingState(true);
+
+            if (!localTypingTimer) {
+                localTypingTimer = setInterval(() => {
+                    if (messageInput.value.trim().length === 0) {
+                        stopLocalTyping();
+                        return;
+                    }
+
+                    sendLocalTypingState(true);
+                }, TYPING_KEEPALIVE_MS);
+            }
+        }
+
+        function onTypingEvent(event) {
+            if (!event || event.sender_role !== (otherInfo && otherInfo.type === 'admin' ? 'admin' : 'visitor')) {
+                return;
+            }
+
+            if (event.typing) {
+                showTypingIndicator(event.sender_name || (otherInfo && (otherInfo.name || otherInfo.username)) || 'User');
+                scheduleRemoteTypingClear();
+            } else {
+                clearRemoteTypingTimer();
+                hideTypingIndicator();
+            }
+        }
+
         function appendMessage(msg) {
+            if (resolvePendingMessage(msg)) return;
+
             if (renderedIds.has(msg.id)) return;
             renderedIds.add(msg.id);
 
@@ -254,7 +439,7 @@
                 <div class="msg__bubble">${escapeHtml(msg.body)}</div>
                 <span class="msg__time">${msg.time || ''}</span>
             `;
-            chatCanvas.appendChild(div);
+            chatCanvas.insertBefore(div, typingIndicator);
         }
 
         function onRealtimeMessage(event) {
@@ -262,6 +447,8 @@
             if (!message) return;
 
             appendMessage(message);
+            clearRemoteTypingTimer();
+            hideTypingIndicator();
             const isMine = message.sender_type === 'visitor' && message.sender_id === myInfo.id;
             if (!isMine) {
                 NChat.Visitor.markConversationRead(conversationId).catch(() => {});
@@ -286,27 +473,22 @@
             isSending = true;
 
             messageInput.value = '';
+            stopLocalTyping();
 
-            // Optimistic append
-            const tempId = 'temp_' + Date.now();
-            const tempDiv = document.createElement('div');
-            tempDiv.className = 'msg mine';
-            tempDiv.dataset.id = tempId;
-            tempDiv.innerHTML = `
-                <div class="msg__bubble">${escapeHtml(body)}</div>
-                <span class="msg__time">sending...</span>
-            `;
-            chatCanvas.appendChild(tempDiv);
+            const clientId = nextClientId();
+            const tempDiv = createPendingMessage(clientId, body);
             scrollToBottom();
 
             try {
-                const data = await NChat.Visitor.sendMessage(body, conversationId);
+                const data = await NChat.Visitor.sendMessage(body, conversationId, clientId);
                 if (data.message) {
-                    renderedIds.add(data.message.id);
-                    tempDiv.querySelector('.msg__time').textContent = data.message.time || '';
-                    tempDiv.dataset.id = data.message.id;
+                    resolvePendingMessage({
+                        ...data.message,
+                        client_id: data.message.client_id || data.client_id,
+                    });
                 }
             } catch (err) {
+                pendingMessages.delete(clientId);
                 tempDiv.querySelector('.msg__time').textContent = 'failed';
                 console.error('Send error:', err);
             }
@@ -318,8 +500,12 @@
         messageInput.addEventListener('keypress', e => {
             if (e.key === 'Enter') sendMessage();
         });
+        messageInput.addEventListener('input', handleTypingInput);
+        messageInput.addEventListener('blur', stopLocalTyping);
 
         window.addEventListener('beforeunload', () => {
+            stopLocalTyping();
+            clearRemoteTypingTimer();
             NChat.Visitor.disconnectRealtime();
         });
 

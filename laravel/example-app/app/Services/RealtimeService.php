@@ -47,32 +47,24 @@ class RealtimeService
 
     public function publishMessage(Conversation $conversation, array $payload, ?string $socketId = null): void
     {
-        $client = $this->client();
-
-        if (!$client) {
-            return;
-        }
-
         $channels = [RealtimeChannels::conversation($conversation)];
 
         if ($conversation->type === 'visitor_admin') {
             $channels[] = RealtimeChannels::ADMIN_FEED;
         }
 
-        $params = [];
-        if ($socketId) {
-            $params['socket_id'] = $socketId;
-        }
+        $this->trigger($conversation, $channels, 'message.created', $payload, $socketId);
+    }
 
-        try {
-            $client->trigger(array_values(array_unique($channels)), 'message.created', $payload, $params);
-        } catch (\Throwable $e) {
-            Log::warning('Realtime publish failed', [
-                'conversation_id' => $conversation->id,
-                'channel_count' => count($channels),
-                'message' => $e->getMessage(),
-            ]);
-        }
+    public function publishTyping(Conversation $conversation, array $payload, ?string $socketId = null): void
+    {
+        $this->trigger(
+            $conversation,
+            [RealtimeChannels::conversation($conversation)],
+            'typing.updated',
+            $payload,
+            $socketId
+        );
     }
 
     private function client(): ?Pusher
@@ -102,5 +94,35 @@ class RealtimeService
         );
 
         return $this->client;
+    }
+
+    private function trigger(
+        Conversation $conversation,
+        array $channels,
+        string $eventName,
+        array $payload,
+        ?string $socketId = null
+    ): void {
+        $client = $this->client();
+
+        if (!$client) {
+            return;
+        }
+
+        $params = [];
+        if ($socketId) {
+            $params['socket_id'] = $socketId;
+        }
+
+        try {
+            $client->trigger(array_values(array_unique($channels)), $eventName, $payload, $params);
+        } catch (\Throwable $e) {
+            Log::warning('Realtime publish failed', [
+                'conversation_id' => $conversation->id,
+                'event' => $eventName,
+                'channel_count' => count($channels),
+                'message' => $e->getMessage(),
+            ]);
+        }
     }
 }

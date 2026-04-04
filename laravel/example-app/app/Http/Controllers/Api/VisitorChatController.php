@@ -29,11 +29,13 @@ class VisitorChatController extends Controller
     {
         return [
             'id' => $msg->id,
+            'client_id' => $msg->client_id,
             'conversation_id' => $msg->conversation_id,
             'sender_id' => $msg->sender_id,
             'sender_type' => $msg->sender_type,
             'body' => $msg->body,
             'is_read' => $msg->is_read,
+            'created_at' => $msg->created_at?->toIso8601String(),
             'time' => $msg->created_at->format('g:i A'),
         ];
     }
@@ -46,6 +48,17 @@ class VisitorChatController extends Controller
                 'id' => $conversation->id,
                 'type' => $conversation->type,
             ],
+        ];
+    }
+
+    private function typingPayload(Visitor $visitor, Conversation $conversation, bool $typing): array
+    {
+        return [
+            'conversation_id' => $conversation->id,
+            'typing' => $typing,
+            'sender_role' => 'visitor',
+            'sender_id' => $visitor->id,
+            'sender_name' => $visitor->name ?? $visitor->username ?? 'Visitor #' . $visitor->id,
         ];
     }
 
@@ -329,6 +342,35 @@ class VisitorChatController extends Controller
         }
     }
 
+    public function typing(Request $request, int $conversationId, RealtimeService $realtime): JsonResponse
+    {
+        $visitor = $this->resolveVisitor($request);
+        if (!$visitor) return response()->json(['error' => 'Invalid token'], 401);
+
+        $request->validate([
+            'typing' => 'required|boolean',
+            'socket_id' => 'nullable|string|max:50',
+        ]);
+
+        $conversation = Conversation::findOrFail($conversationId);
+        $isParticipant = $conversation->participant_one_id === $visitor->id
+            || $conversation->participant_two_id === $visitor->id;
+
+        if (!$isParticipant) {
+            return response()->json(['error' => 'Forbidden'], 403);
+        }
+
+        $visitor->update(['last_seen_at' => now()]);
+
+        $realtime->publishTyping(
+            $conversation,
+            $this->typingPayload($visitor, $conversation, (bool) $request->boolean('typing')),
+            $request->input('socket_id')
+        );
+
+        return response()->json(['status' => 'ok']);
+    }
+
     // ─── Poll (admin conversation) ───
 
     public function poll(Request $request): JsonResponse
@@ -464,6 +506,7 @@ class VisitorChatController extends Controller
                     'other' => $other,
                     'last_message' => $latest ? [
                         'body' => Str::limit($latest->body, 50),
+                        'created_at' => $latest->created_at?->toIso8601String(),
                         'time' => $latest->created_at->format('g:i A'),
                         'sender_type' => $latest->sender_type,
                     ] : null,
