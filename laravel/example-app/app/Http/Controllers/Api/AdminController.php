@@ -7,6 +7,8 @@ use App\Models\Admin;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\Visitor;
+use App\Services\RealtimeService;
+use App\Support\RealtimeChannels;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -32,6 +34,25 @@ class AdminController extends Controller
             'is_read' => $msg->is_read,
             'time' => $msg->created_at->format('g:i A'),
         ];
+    }
+
+    private function messagePayload(Message $msg, Conversation $conversation): array
+    {
+        return [
+            'message' => $this->formatMessage($msg),
+            'conversation' => [
+                'id' => $conversation->id,
+                'type' => $conversation->type,
+            ],
+        ];
+    }
+
+    private function markConversationReadForAdmin(Conversation $conversation): void
+    {
+        $conversation->messages()
+            ->where('sender_type', 'visitor')
+            ->where('is_read', false)
+            ->update(['is_read' => true]);
     }
 
     // ─── Login ───
@@ -119,10 +140,7 @@ class AdminController extends Controller
         $conv = Conversation::findOrCreateVisitorAdmin($visitor->id, $admin->id);
 
         // Mark visitor messages as read
-        $conv->messages()
-            ->where('sender_type', 'visitor')
-            ->where('is_read', false)
-            ->update(['is_read' => true]);
+        $this->markConversationReadForAdmin($conv);
 
         $messages = $conv->messages()->get()->map(fn($m) => $this->formatMessage($m));
 
@@ -141,7 +159,7 @@ class AdminController extends Controller
 
     // ─── Send Message ───
 
-    public function sendMessage(Request $request, int $visitorId): JsonResponse
+    public function sendMessage(Request $request, int $visitorId, RealtimeService $realtime): JsonResponse
     {
         $admin = $this->resolveAdmin($request);
         if (!$admin) return response()->json(['error' => 'Unauthorized'], 401);
@@ -149,6 +167,7 @@ class AdminController extends Controller
         $request->validate([
             'body' => 'required|string|max:5000',
             'client_id' => 'required|string|max:36',
+            'socket_id' => 'nullable|string|max:50',
         ]);
 
         cache(['admin_last_poll' => now()], now()->addMinutes(1));
@@ -165,14 +184,90 @@ class AdminController extends Controller
             ]
         );
 
-        $conv->touch(); // update conversation timestamp
+        if ($message->wasRecentlyCreated) {
+            $conv->touch();
+            $realtime->publishMessage(
+                $conv,
+                $this->messagePayload($message, $conv),
+                $request->input('socket_id')
+            );
+        }
 
         return response()->json([
             'message' => $this->formatMessage($message),
         ], 201);
     }
 
+    public function realtimeAuth(Request $request, RealtimeService $realtime): JsonResponse
+    {
+        $admin = $this->resolveAdmin($request);
+        if (!$admin) return response()->json(['error' => 'Unauthorized'], 401);
+
+        $request->validate([
+            'socket_id' => 'required|string|max:50',
+            'channel_name' => 'required|string|max:100',
+        ]);
+
+        $channelName = (string) $request->input('channel_name');
+        $socketId = (string) $request->input('socket_id');
+        $presenceUserId = null;
+        $presenceUserInfo = null;
+
+        $allowed = $channelName === RealtimeChannels::ADMIN_FEED;
+
+        if (!$allowed && $channelName === RealtimeChannels::ADMIN_PRESENCE) {
+            $allowed = true;
+            $presenceUserId = 'admin-' . $admin->id;
+            $presenceUserInfo = [
+                'role' => 'admin',
+                'name' => $admin->name,
+            ];
+        }
+
+        if (!$allowed && preg_match('/^presence-conversation\.(\d+)$/', $channelName, $matches)) {
+            $conversation = Conversation::find((int) $matches[1]);
+
+            $allowed = $conversation
+                && $conversation->type === 'visitor_admin'
+                && $conversation->participant_two_id === $admin->id;
+
+            if ($allowed) {
+                $presenceUserId = 'admin-' . $admin->id;
+                $presenceUserInfo = [
+                    'role' => 'admin',
+                    'name' => $admin->name,
+                ];
+            }
+        }
+
+        if (!$allowed) {
+            return response()->json(['error' => 'Forbidden'], 403);
+        }
+
+        try {
+            return response()->json(
+                $realtime->authorizeChannel($channelName, $socketId, $presenceUserId, $presenceUserInfo)
+            );
+        } catch (\Throwable $e) {
+            report($e);
+
+            return response()->json(['error' => 'Realtime auth failed'], 503);
+        }
+    }
+
     // ─── Poll (global — for conversation list) ───
+
+    public function markConversationRead(Request $request, int $visitorId): JsonResponse
+    {
+        $admin = $this->resolveAdmin($request);
+        if (!$admin) return response()->json(['error' => 'Unauthorized'], 401);
+
+        $visitor = Visitor::findOrFail($visitorId);
+        $conversation = Conversation::findOrCreateVisitorAdmin($visitor->id, $admin->id);
+        $this->markConversationReadForAdmin($conversation);
+
+        return response()->json(['status' => 'ok']);
+    }
 
     public function poll(Request $request): JsonResponse
     {
@@ -214,10 +309,7 @@ class AdminController extends Controller
         $conv = Conversation::findOrCreateVisitorAdmin($visitor->id, $admin->id);
 
         // Mark visitor messages as read
-        $conv->messages()
-            ->where('sender_type', 'visitor')
-            ->where('is_read', false)
-            ->update(['is_read' => true]);
+        $this->markConversationReadForAdmin($conv);
 
         $messages = $conv->messages()
             ->where('id', '>', $sinceId)
@@ -227,6 +319,31 @@ class AdminController extends Controller
         return response()->json([
             'messages' => $messages,
             'visitor_online' => $visitor->isOnline(),
+        ]);
+    }
+
+    public function heartbeat(Request $request): JsonResponse
+    {
+        $admin = $this->resolveAdmin($request);
+        if (!$admin) return response()->json(['error' => 'Unauthorized'], 401);
+
+        $request->validate([
+            'visitor_id' => 'nullable|integer',
+        ]);
+
+        cache(['admin_last_poll' => now()], now()->addMinutes(1));
+
+        $visitorOnline = null;
+        $visitorId = (int) $request->input('visitor_id', 0);
+
+        if ($visitorId > 0) {
+            $visitor = Visitor::find($visitorId);
+            $visitorOnline = $visitor ? $visitor->isOnline() : false;
+        }
+
+        return response()->json([
+            'status' => 'ok',
+            'visitor_online' => $visitorOnline,
         ]);
     }
 }

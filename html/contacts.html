@@ -256,6 +256,89 @@
         const searchInput = document.getElementById('searchInput');
         const searchResults = document.getElementById('searchResults');
         let searchTimeout = null;
+        let contacts = [];
+        let adminPresenceReady = false;
+        let adminPresenceSnapshot = { members: [] };
+        const contactConversationSlots = new Set();
+        const conversationPresenceSnapshots = {};
+
+        function hasAdminMember(snapshot) {
+            return Array.isArray(snapshot && snapshot.members)
+                && snapshot.members.some(member => String(member.id).startsWith('admin-'));
+        }
+
+        function hasConversationMember(conversationId, visitorId, fallback = false) {
+            const snapshot = conversationPresenceSnapshots[conversationId];
+            if (!snapshot || !Array.isArray(snapshot.members)) {
+                return fallback;
+            }
+
+            return snapshot.members.some(member => String(member.id) === `visitor-${visitorId}`);
+        }
+
+        function applyLivePresence(items) {
+            return (items || []).map(contact => {
+                if (!contact.other) {
+                    return contact;
+                }
+
+                const other = { ...contact.other };
+                if (other.type === 'admin') {
+                    other.is_online = adminPresenceReady
+                        ? hasAdminMember(adminPresenceSnapshot)
+                        : other.is_online;
+                } else {
+                    other.is_online = hasConversationMember(
+                        contact.conversation_id,
+                        other.id,
+                        other.is_online
+                    );
+                }
+
+                return {
+                    ...contact,
+                    other,
+                };
+            });
+        }
+
+        function syncContactSubscriptions() {
+            const desiredSlots = new Set();
+
+            contacts.forEach(contact => {
+                if (!contact || !contact.conversation_id) {
+                    return;
+                }
+
+                const slot = `visitorContactsConversation_${contact.conversation_id}`;
+                desiredSlots.add(slot);
+
+                if (contactConversationSlots.has(slot)) {
+                    return;
+                }
+
+                contactConversationSlots.add(slot);
+                NChat.Visitor.subscribeToConversation(contact.conversation_id, {
+                    onMessage: () => loadContacts(),
+                    onPresenceChange: snapshot => {
+                        conversationPresenceSnapshots[contact.conversation_id] = snapshot;
+                        contacts = applyLivePresence(contacts);
+                        renderContacts(contacts);
+                    },
+                }, slot).catch(err => {
+                    console.error('Conversation subscribe error:', err);
+                });
+            });
+
+            Array.from(contactConversationSlots).forEach(slot => {
+                if (desiredSlots.has(slot)) {
+                    return;
+                }
+
+                contactConversationSlots.delete(slot);
+                NChat.Visitor.unsubscribeConversation(slot);
+            });
+        }
 
         // ── Init ──
         async function init() {
@@ -266,6 +349,15 @@
                 document.getElementById('myUsername').textContent = '@' + (info.username || 'user');
             }
 
+            NChat.Visitor.subscribeToAdminPresence(snapshot => {
+                adminPresenceReady = true;
+                adminPresenceSnapshot = snapshot;
+                contacts = applyLivePresence(contacts);
+                renderContacts(contacts);
+            }, 'visitorContactsAdminPresence').catch(err => {
+                console.error('Admin presence error:', err);
+            });
+
             await loadContacts();
         }
 
@@ -273,7 +365,9 @@
         async function loadContacts() {
             try {
                 const data = await NChat.Visitor.getContacts();
-                renderContacts(data.contacts || []);
+                contacts = applyLivePresence(data.contacts || []);
+                renderContacts(contacts);
+                syncContactSubscriptions();
             } catch (err) {
                 console.error('Load contacts error:', err);
                 contactsList.innerHTML = '<div class="empty-state"><div class="empty-state__icon"><span class="material-symbols-outlined" style="font-size:3rem;">error</span></div><div class="empty-state__title">Could not load contacts</div></div>';
@@ -379,12 +473,15 @@
 
         // ── Logout ──
         document.getElementById('logoutBtn').addEventListener('click', () => {
+            NChat.Visitor.disconnectRealtime();
             NChat.Visitor.clearToken();
             window.location.href = 'visitor.html';
         });
 
         // ── Refresh contacts periodically ──
-        setInterval(loadContacts, 5000);
+        window.addEventListener('beforeunload', () => {
+            NChat.Visitor.disconnectRealtime();
+        });
 
         init();
     </script>

@@ -168,18 +168,25 @@
         const sendBtn = document.getElementById('sendBtn');
         const renderedIds = new Set();
         let myInfo = NChat.Visitor.getInfo();
+        let otherInfo = null;
         let isSending = false;
+
+        function hasMember(snapshot, memberId) {
+            return Array.isArray(snapshot && snapshot.members)
+                && snapshot.members.some(member => String(member.id) === memberId);
+        }
 
         // ── Init ──
         async function init() {
             try {
                 const data = await NChat.Visitor.getConversationMessages(conversationId);
+                otherInfo = data.other || null;
 
                 // Set header info
-                if (data.other) {
-                    document.getElementById('chatName').textContent = data.other.name || data.other.username || 'User';
-                    document.getElementById('chatAvatar').textContent = (data.other.name || data.other.username || '?').charAt(0).toUpperCase();
-                    updateOnlineStatus(data.other.is_online);
+                if (otherInfo) {
+                    document.getElementById('chatName').textContent = otherInfo.name || otherInfo.username || 'User';
+                    document.getElementById('chatAvatar').textContent = (otherInfo.name || otherInfo.username || '?').charAt(0).toUpperCase();
+                    updateOnlineStatus(otherInfo.is_online);
                 }
 
                 // Render messages
@@ -188,8 +195,17 @@
                 }
                 scrollToBottom();
 
-                // Start polling
-                NChat.Visitor.startConversationPolling(conversationId, onNewMessages);
+                if (otherInfo && otherInfo.type === 'admin') {
+                    await Promise.all([
+                        NChat.Visitor.subscribeToConversation(conversationId, { onMessage: onRealtimeMessage }),
+                        NChat.Visitor.subscribeToAdminPresence(onAdminPresence, 'visitorChatAdminPresence'),
+                    ]);
+                } else {
+                    await NChat.Visitor.subscribeToConversation(conversationId, {
+                        onMessage: onRealtimeMessage,
+                        onPresenceChange: onConversationPresence,
+                    });
+                }
 
             } catch (err) {
                 console.error('Init error:', err);
@@ -211,6 +227,21 @@
             }
         }
 
+        function onConversationPresence(snapshot) {
+            if (!otherInfo || otherInfo.type === 'admin') {
+                return;
+            }
+
+            updateOnlineStatus(hasMember(snapshot, `visitor-${otherInfo.id}`));
+        }
+
+        function onAdminPresence(snapshot) {
+            updateOnlineStatus(
+                Array.isArray(snapshot && snapshot.members)
+                    && snapshot.members.some(member => String(member.id).startsWith('admin-'))
+            );
+        }
+
         function appendMessage(msg) {
             if (renderedIds.has(msg.id)) return;
             renderedIds.add(msg.id);
@@ -226,9 +257,15 @@
             chatCanvas.appendChild(div);
         }
 
-        function onNewMessages(messages, otherOnline) {
-            updateOnlineStatus(otherOnline);
-            messages.forEach(m => appendMessage(m));
+        function onRealtimeMessage(event) {
+            const message = event && event.message ? event.message : event;
+            if (!message) return;
+
+            appendMessage(message);
+            const isMine = message.sender_type === 'visitor' && message.sender_id === myInfo.id;
+            if (!isMine) {
+                NChat.Visitor.markConversationRead(conversationId).catch(() => {});
+            }
             scrollToBottom();
         }
 
@@ -280,6 +317,10 @@
         sendBtn.addEventListener('click', sendMessage);
         messageInput.addEventListener('keypress', e => {
             if (e.key === 'Enter') sendMessage();
+        });
+
+        window.addEventListener('beforeunload', () => {
+            NChat.Visitor.disconnectRealtime();
         });
 
         init();

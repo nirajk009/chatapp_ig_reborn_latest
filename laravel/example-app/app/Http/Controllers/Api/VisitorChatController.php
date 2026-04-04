@@ -7,6 +7,8 @@ use App\Models\Admin;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\Visitor;
+use App\Services\RealtimeService;
+use App\Support\RealtimeChannels;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -34,6 +36,28 @@ class VisitorChatController extends Controller
             'is_read' => $msg->is_read,
             'time' => $msg->created_at->format('g:i A'),
         ];
+    }
+
+    private function messagePayload(Message $msg, Conversation $conversation): array
+    {
+        return [
+            'message' => $this->formatMessage($msg),
+            'conversation' => [
+                'id' => $conversation->id,
+                'type' => $conversation->type,
+            ],
+        ];
+    }
+
+    private function markConversationReadForVisitor(Conversation $conversation, Visitor $visitor): void
+    {
+        $conversation->messages()
+            ->where('is_read', false)
+            ->where(function ($query) use ($visitor) {
+                $query->where('sender_type', '!=', 'visitor')
+                    ->orWhere('sender_id', '!=', $visitor->id);
+            })
+            ->update(['is_read' => true]);
     }
 
     // ─── Init (anonymous session) ───
@@ -188,8 +212,11 @@ class VisitorChatController extends Controller
         $visitor = $this->resolveVisitor($request);
         if (!$visitor) return response()->json(['error' => 'Invalid token'], 401);
 
+        $visitor->update(['last_seen_at' => now()]);
+
         $admin = Admin::first();
         $conv = Conversation::findOrCreateVisitorAdmin($visitor->id, $admin ? $admin->id : 1);
+        $this->markConversationReadForVisitor($conv, $visitor);
 
         $messages = $conv->messages()->get()->map(fn($m) => $this->formatMessage($m));
 
@@ -201,7 +228,7 @@ class VisitorChatController extends Controller
 
     // ─── Send Message (to a conversation) ───
 
-    public function sendMessage(Request $request): JsonResponse
+    public function sendMessage(Request $request, RealtimeService $realtime): JsonResponse
     {
         $visitor = $this->resolveVisitor($request);
         if (!$visitor) return response()->json(['error' => 'Invalid token'], 401);
@@ -210,6 +237,7 @@ class VisitorChatController extends Controller
             'body' => 'required|string|max:5000',
             'client_id' => 'required|string|max:36',
             'conversation_id' => 'sometimes|integer',
+            'socket_id' => 'nullable|string|max:50',
         ]);
 
         $visitor->update(['last_seen_at' => now()]);
@@ -232,9 +260,73 @@ class VisitorChatController extends Controller
             ]
         );
 
+        if ($message->wasRecentlyCreated) {
+            $conv->touch();
+            $realtime->publishMessage(
+                $conv,
+                $this->messagePayload($message, $conv),
+                $request->input('socket_id')
+            );
+        }
+
         return response()->json([
             'message' => $this->formatMessage($message),
         ], 201);
+    }
+
+    public function realtimeAuth(Request $request, RealtimeService $realtime): JsonResponse
+    {
+        $visitor = $this->resolveVisitor($request);
+        if (!$visitor) return response()->json(['error' => 'Invalid token'], 401);
+
+        $request->validate([
+            'socket_id' => 'required|string|max:50',
+            'channel_name' => 'required|string|max:100',
+        ]);
+
+        $channelName = (string) $request->input('channel_name');
+        $socketId = (string) $request->input('socket_id');
+        $presenceUserId = null;
+        $presenceUserInfo = null;
+
+        if ($channelName === RealtimeChannels::ADMIN_PRESENCE) {
+            $presenceUserId = 'visitor-' . $visitor->id;
+            $presenceUserInfo = [
+                'role' => 'visitor',
+            ];
+        } elseif (preg_match('/^presence-conversation\.(\d+)$/', $channelName, $matches)) {
+            $conversation = Conversation::find((int) $matches[1]);
+            if (!$conversation) {
+                return response()->json(['error' => 'Conversation not found'], 404);
+            }
+
+            $isParticipant = $conversation->participant_one_id === $visitor->id
+                || $conversation->participant_two_id === $visitor->id;
+
+            if (!$isParticipant) {
+                return response()->json(['error' => 'Forbidden'], 403);
+            }
+
+            $presenceUserId = 'visitor-' . $visitor->id;
+            $presenceUserInfo = [
+                'role' => 'visitor',
+                'name' => $visitor->name ?? $visitor->username ?? 'Visitor #' . $visitor->id,
+            ];
+        } else {
+            return response()->json(['error' => 'Forbidden'], 403);
+        }
+
+        $visitor->update(['last_seen_at' => now()]);
+
+        try {
+            return response()->json(
+                $realtime->authorizeChannel($channelName, $socketId, $presenceUserId, $presenceUserInfo)
+            );
+        } catch (\Throwable $e) {
+            report($e);
+
+            return response()->json(['error' => 'Realtime auth failed'], 503);
+        }
     }
 
     // ─── Poll (admin conversation) ───
@@ -272,6 +364,41 @@ class VisitorChatController extends Controller
         return response()->json([
             'messages' => $messages,
             'admin_online' => $adminOnline,
+        ]);
+    }
+
+    public function heartbeat(Request $request): JsonResponse
+    {
+        $visitor = $this->resolveVisitor($request);
+        if (!$visitor) return response()->json(['error' => 'Invalid token'], 401);
+
+        $request->validate([
+            'conversation_id' => 'nullable|integer',
+        ]);
+
+        $visitor->update(['last_seen_at' => now()]);
+
+        $conversationId = (int) $request->input('conversation_id', 0);
+        $otherOnline = cache('admin_last_poll') && now()->diffInSeconds(cache('admin_last_poll')) < 30;
+
+        if ($conversationId > 0) {
+            $conversation = Conversation::find($conversationId);
+
+            if ($conversation) {
+                $otherId = $conversation->otherParticipantId($visitor->id);
+
+                if ($conversation->type === 'visitor_admin') {
+                    $otherOnline = cache('admin_last_poll') && now()->diffInSeconds(cache('admin_last_poll')) < 30;
+                } else {
+                    $other = Visitor::find($otherId);
+                    $otherOnline = $other ? $other->isOnline() : false;
+                }
+            }
+        }
+
+        return response()->json([
+            'status' => 'ok',
+            'other_online' => (bool) $otherOnline,
         ]);
     }
 
@@ -407,7 +534,17 @@ class VisitorChatController extends Controller
         $visitor = $this->resolveVisitor($request);
         if (!$visitor) return response()->json(['error' => 'Invalid token'], 401);
 
+        $visitor->update(['last_seen_at' => now()]);
+
         $conv = Conversation::findOrFail($conversationId);
+        $isParticipant = $conv->participant_one_id === $visitor->id
+            || $conv->participant_two_id === $visitor->id;
+
+        if (!$isParticipant) {
+            return response()->json(['error' => 'Forbidden'], 403);
+        }
+
+        $this->markConversationReadForVisitor($conv, $visitor);
 
         $messages = $conv->messages()->get()->map(fn($m) => $this->formatMessage($m));
 
@@ -441,6 +578,26 @@ class VisitorChatController extends Controller
     }
 
     // ─── Poll a specific conversation ───
+
+    public function markConversationRead(Request $request, int $conversationId): JsonResponse
+    {
+        $visitor = $this->resolveVisitor($request);
+        if (!$visitor) return response()->json(['error' => 'Invalid token'], 401);
+
+        $visitor->update(['last_seen_at' => now()]);
+
+        $conversation = Conversation::findOrFail($conversationId);
+        $isParticipant = $conversation->participant_one_id === $visitor->id
+            || $conversation->participant_two_id === $visitor->id;
+
+        if (!$isParticipant) {
+            return response()->json(['error' => 'Forbidden'], 403);
+        }
+
+        $this->markConversationReadForVisitor($conversation, $visitor);
+
+        return response()->json(['status' => 'ok']);
+    }
 
     public function pollConversation(Request $request, int $conversationId): JsonResponse
     {

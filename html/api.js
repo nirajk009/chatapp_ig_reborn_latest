@@ -1,44 +1,264 @@
 const NChat = (() => {
-    // ── Config ──
     const API_BASE = 'http://localhost:8080/api';
-    const POLL_INTERVAL = 500;
+    const REALTIME = {
+        key: '16fd173f2dd3ebb99caa',
+        cluster: 'ap2',
+        scriptUrl: 'https://js.pusher.com/8.4.0/pusher.min.js',
+        conversationPrefix: 'presence-conversation.',
+        adminFeedChannel: 'private-admin.feed',
+        adminPresenceChannel: 'presence-admin.global',
+    };
 
-    // ── UUID helper ──
     function uuid() {
         return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
             const r = Math.random() * 16 | 0;
-            return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+            return (c === 'x' ? r : ((r & 0x3) | 0x8)).toString(16);
         });
     }
 
-    // ── Helpers ──
     async function request(method, path, body = null, headers = {}) {
-        const opts = {
-            method,
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                ...headers,
-            },
+        const finalHeaders = {
+            Accept: 'application/json',
+            ...headers,
         };
-        if (body) opts.body = JSON.stringify(body);
 
-        const res = await fetch(`${API_BASE}${path}`, opts);
-        const data = await res.json();
-
-        if (!res.ok) {
-            throw { status: res.status, ...data };
+        if (body !== null) {
+            finalHeaders['Content-Type'] = 'application/json';
         }
+
+        const response = await fetch(`${API_BASE}${path}`, {
+            method,
+            headers: finalHeaders,
+            body: body !== null ? JSON.stringify(body) : undefined,
+        });
+
+        const contentType = response.headers.get('content-type') || '';
+        const data = contentType.includes('application/json')
+            ? await response.json()
+            : {};
+
+        if (!response.ok) {
+            throw { status: response.status, ...data };
+        }
+
         return data;
     }
 
-    // ── Visitor API ──
+    const Realtime = {
+        _loader: null,
+        _clients: {
+            visitor: null,
+            admin: null,
+        },
+        _subscriptions: {},
+
+        async ensureScript() {
+            if (window.Pusher) {
+                return window.Pusher;
+            }
+
+            if (this._loader) {
+                return this._loader;
+            }
+
+            this._loader = new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = REALTIME.scriptUrl;
+                script.async = true;
+                script.dataset.nchatPusher = 'true';
+                script.onload = () => resolve(window.Pusher);
+                script.onerror = () => reject(new Error('Failed to load Pusher'));
+                document.head.appendChild(script);
+            }).then(Pusher => {
+                Pusher.logToConsole = false;
+                return Pusher;
+            });
+
+            return this._loader;
+        },
+
+        async createClient(role, endpoint, headersProvider) {
+            if (this._clients[role]) {
+                return this._clients[role];
+            }
+
+            const Pusher = await this.ensureScript();
+            const client = new Pusher(REALTIME.key, {
+                cluster: REALTIME.cluster,
+                forceTLS: true,
+                enabledTransports: ['ws', 'wss'],
+                channelAuthorization: {
+                    endpoint,
+                    transport: 'ajax',
+                    headersProvider,
+                },
+            });
+
+            this._clients[role] = client;
+            return client;
+        },
+
+        async visitorClient() {
+            return this.createClient(
+                'visitor',
+                `${API_BASE}/visitor/realtime/auth`,
+                () => Visitor.headers()
+            );
+        },
+
+        async adminClient() {
+            return this.createClient(
+                'admin',
+                `${API_BASE}/admin/realtime/auth`,
+                () => AdminAPI.headers()
+            );
+        },
+
+        async waitForSocketId(client) {
+            if (client.connection && client.connection.socket_id) {
+                return client.connection.socket_id;
+            }
+
+            return new Promise(resolve => {
+                const finish = socketId => {
+                    clearTimeout(timer);
+                    client.connection.unbind('connected', handleConnected);
+                    client.connection.unbind('error', handleError);
+                    resolve(socketId || null);
+                };
+
+                const handleConnected = () => finish(client.connection ? client.connection.socket_id : null);
+                const handleError = () => finish(null);
+                const timer = setTimeout(
+                    () => finish(client.connection ? client.connection.socket_id : null),
+                    3000
+                );
+
+                client.connection.bind('connected', handleConnected);
+                client.connection.bind('error', handleError);
+            });
+        },
+
+        async getSocketId(role) {
+            const client = role === 'admin'
+                ? await this.adminClient()
+                : await this.visitorClient();
+
+            return this.waitForSocketId(client);
+        },
+
+        presenceSnapshot(channel) {
+            const rawMembers = channel && channel.members && channel.members.members
+                ? channel.members.members
+                : {};
+
+            return {
+                channel: channel ? channel.name : null,
+                total: channel && channel.members ? channel.members.count : Object.keys(rawMembers).length,
+                members: Object.values(rawMembers).map(member => ({
+                    id: String(member.id),
+                    info: member.info || {},
+                })),
+            };
+        },
+
+        bindPresenceHandlers(channel, onPresenceChange) {
+            if (!onPresenceChange) {
+                return;
+            }
+
+            const emit = () => onPresenceChange(this.presenceSnapshot(channel));
+
+            channel.bind('pusher:subscription_succeeded', emit);
+            channel.bind('pusher:member_added', emit);
+            channel.bind('pusher:member_removed', emit);
+        },
+
+        async subscribe(slot, role, channelName, handlers = {}) {
+            const client = role === 'admin'
+                ? await this.adminClient()
+                : await this.visitorClient();
+
+            const existing = this._subscriptions[slot];
+            if (existing && existing.name !== channelName) {
+                this.unsubscribe(slot);
+            }
+
+            let channel = client.channel(channelName);
+            if (!channel) {
+                channel = client.subscribe(channelName);
+            }
+
+            channel.unbind_all();
+
+            if (handlers.onMessage) {
+                channel.bind('message.created', handlers.onMessage);
+            }
+
+            this.bindPresenceHandlers(channel, handlers.onPresenceChange);
+
+            this._subscriptions[slot] = {
+                role,
+                name: channelName,
+                channel,
+            };
+
+            return channel;
+        },
+
+        unsubscribe(slot) {
+            const entry = this._subscriptions[slot];
+            if (!entry) {
+                return;
+            }
+
+            const client = this._clients[entry.role];
+            entry.channel.unbind_all();
+
+            if (client) {
+                client.unsubscribe(entry.name);
+            }
+
+            delete this._subscriptions[slot];
+        },
+
+        disconnect(role) {
+            Object.keys(this._subscriptions).forEach(slot => {
+                if (this._subscriptions[slot].role === role) {
+                    this.unsubscribe(slot);
+                }
+            });
+
+            const client = this._clients[role];
+            if (client) {
+                client.disconnect();
+            }
+
+            this._clients[role] = null;
+        },
+    };
+
+    function trackLatestIds(target, message) {
+        if (!message || typeof message.id === 'undefined') {
+            return;
+        }
+
+        const id = Number(message.id);
+        if (!Number.isFinite(id)) {
+            return;
+        }
+
+        target._lastId = Math.max(target._lastId, id);
+        target._conversationLastIds[message.conversation_id] = Math.max(
+            target._conversationLastIds[message.conversation_id] || 0,
+            id
+        );
+    }
+
     const Visitor = {
         _token: null,
-        _pollTimer: null,
         _lastId: 0,
-        _convPollTimer: null,
-        _convLastId: 0,
+        _conversationLastIds: {},
 
         getToken() {
             if (this._token) return this._token;
@@ -53,6 +273,8 @@ const NChat = (() => {
 
         clearToken() {
             this._token = null;
+            this._lastId = 0;
+            this._conversationLastIds = {};
             localStorage.removeItem('nchat_visitor_token');
             localStorage.removeItem('nchat_visitor_info');
         },
@@ -60,11 +282,20 @@ const NChat = (() => {
         isLoggedIn() {
             const info = localStorage.getItem('nchat_visitor_info');
             if (!info) return false;
-            try { return JSON.parse(info).is_logged_in === true; } catch { return false; }
+
+            try {
+                return JSON.parse(info).is_logged_in === true;
+            } catch {
+                return false;
+            }
         },
 
         getInfo() {
-            try { return JSON.parse(localStorage.getItem('nchat_visitor_info')); } catch { return null; }
+            try {
+                return JSON.parse(localStorage.getItem('nchat_visitor_info'));
+            } catch {
+                return null;
+            }
         },
 
         setInfo(info) {
@@ -72,8 +303,8 @@ const NChat = (() => {
         },
 
         headers() {
-            const t = this.getToken();
-            return t ? { 'X-Visitor-Token': t } : {};
+            const token = this.getToken();
+            return token ? { 'X-Visitor-Token': token } : {};
         },
 
         async init() {
@@ -86,122 +317,151 @@ const NChat = (() => {
         },
 
         async signup(name, email, password, username) {
-            const data = await request('POST', '/visitor/signup', { name, email, password, username }, this.headers());
+            const data = await request(
+                'POST',
+                '/visitor/signup',
+                { name, email, password, username },
+                this.headers()
+            );
+
             if (data.visitor && data.visitor.token) {
                 this.setToken(data.visitor.token);
                 this.setInfo(data.visitor);
             }
+
             return data;
         },
 
         async login(email, password) {
             const data = await request('POST', '/visitor/login', { email, password });
+
             if (data.is_admin && data.token) {
-                // Admin login via visitor endpoint
-                NChat.Admin.setToken(data.token);
+                AdminAPI.setToken(data.token);
+                if (data.admin) {
+                    AdminAPI.setInfo(data.admin);
+                }
             } else if (data.visitor && data.visitor.token) {
                 this.setToken(data.visitor.token);
                 this.setInfo(data.visitor);
             }
+
             return data;
         },
 
         async getMessages() {
             const data = await request('GET', '/visitor/messages', null, this.headers());
             if (data.messages && data.messages.length > 0) {
-                this._lastId = data.messages[data.messages.length - 1].id;
+                data.messages.forEach(message => trackLatestIds(this, message));
             }
             return data;
         },
 
         async sendMessage(body, conversationId = null) {
             const clientId = uuid();
-            const payload = { body, client_id: clientId };
-            if (conversationId) payload.conversation_id = conversationId;
+            const payload = {
+                body,
+                client_id: clientId,
+            };
+
+            if (conversationId) {
+                payload.conversation_id = conversationId;
+            }
+
+            const socketId = await Realtime.getSocketId('visitor').catch(() => null);
+            if (socketId) {
+                payload.socket_id = socketId;
+            }
+
             const data = await request('POST', '/visitor/messages', payload, this.headers());
             if (data.message) {
-                this._lastId = Math.max(this._lastId, data.message.id);
+                trackLatestIds(this, data.message);
             }
+
             return { ...data, client_id: clientId };
         },
 
-        async poll(conversationId = null) {
-            const params = `since_id=${this._lastId}` + (conversationId ? `&conversation_id=${conversationId}` : '');
-            return await request('GET', `/visitor/poll?${params}`, null, this.headers());
-        },
-
         async saveInfo(name, email) {
-            return await request('POST', '/visitor/save-info', { name, email }, this.headers());
+            return request('POST', '/visitor/save-info', { name, email }, this.headers());
         },
-
-        // ── Contacts & V2V ──
 
         async getContacts() {
-            return await request('GET', '/visitor/contacts', null, this.headers());
+            return request('GET', '/visitor/contacts', null, this.headers());
         },
 
         async searchUsers(q) {
-            return await request('GET', `/visitor/search-users?q=${encodeURIComponent(q)}`, null, this.headers());
+            return request('GET', `/visitor/search-users?q=${encodeURIComponent(q)}`, null, this.headers());
         },
 
         async startChat(username) {
-            return await request('POST', '/visitor/start-chat', { username }, this.headers());
+            return request('POST', '/visitor/start-chat', { username }, this.headers());
         },
 
         async getConversationMessages(conversationId) {
-            const data = await request('GET', `/visitor/conversations/${conversationId}/messages`, null, this.headers());
+            const data = await request(
+                'GET',
+                `/visitor/conversations/${conversationId}/messages`,
+                null,
+                this.headers()
+            );
+
             if (data.messages && data.messages.length > 0) {
-                this._convLastId = data.messages[data.messages.length - 1].id;
+                data.messages.forEach(message => trackLatestIds(this, message));
             }
+
             return data;
         },
 
-        async pollConversation(conversationId) {
-            return await request('GET', `/visitor/conversations/${conversationId}/poll?since_id=${this._convLastId}`, null, this.headers());
+        async markConversationRead(conversationId) {
+            return request(
+                'POST',
+                `/visitor/conversations/${conversationId}/read`,
+                null,
+                this.headers()
+            );
         },
 
-        startPolling(onNewMessages, conversationId = null) {
-            this.stopPolling();
-            this._pollTimer = setInterval(async () => {
-                try {
-                    const data = await this.poll(conversationId);
-                    if (data.messages && data.messages.length > 0) {
-                        this._lastId = data.messages[data.messages.length - 1].id;
-                        onNewMessages(data.messages, data.admin_online);
-                    }
-                } catch (e) { /* silently retry */ }
-            }, POLL_INTERVAL);
+        async subscribeToConversation(conversationId, handlers = {}, slot = 'visitorConversation') {
+            return Realtime.subscribe(
+                slot,
+                'visitor',
+                `${REALTIME.conversationPrefix}${conversationId}`,
+                {
+                    onMessage: event => {
+                        const message = event && event.message ? event.message : event;
+                        trackLatestIds(this, message);
+                        if (handlers.onMessage) {
+                            handlers.onMessage(event);
+                        }
+                    },
+                    onPresenceChange: handlers.onPresenceChange,
+                }
+            );
         },
 
-        stopPolling() {
-            if (this._pollTimer) { clearInterval(this._pollTimer); this._pollTimer = null; }
+        unsubscribeConversation(slot = 'visitorConversation') {
+            Realtime.unsubscribe(slot);
         },
 
-        startConversationPolling(conversationId, onNewMessages) {
-            this.stopConversationPolling();
-            this._convPollTimer = setInterval(async () => {
-                try {
-                    const data = await this.pollConversation(conversationId);
-                    if (data.messages && data.messages.length > 0) {
-                        this._convLastId = data.messages[data.messages.length - 1].id;
-                        onNewMessages(data.messages, data.other_online);
-                    }
-                } catch (e) { /* silently retry */ }
-            }, POLL_INTERVAL);
+        async subscribeToAdminPresence(onPresenceChange, slot = 'visitorAdminPresence') {
+            return Realtime.subscribe(slot, 'visitor', REALTIME.adminPresenceChannel, {
+                onPresenceChange,
+            });
         },
 
-        stopConversationPolling() {
-            if (this._convPollTimer) { clearInterval(this._convPollTimer); this._convPollTimer = null; }
+        unsubscribeAdminPresence(slot = 'visitorAdminPresence') {
+            Realtime.unsubscribe(slot);
+        },
+
+        disconnectRealtime() {
+            Realtime.disconnect('visitor');
         },
     };
 
-    // ── Admin API ──
     const AdminAPI = {
         _token: null,
-        _pollTimer: null,
+        _info: null,
         _lastId: 0,
-        _convPollTimer: null,
-        _convLastId: 0,
+        _conversationLastIds: {},
 
         getToken() {
             if (this._token) return this._token;
@@ -214,9 +474,30 @@ const NChat = (() => {
             localStorage.setItem('nchat_admin_token', token);
         },
 
+        getInfo() {
+            if (this._info) return this._info;
+
+            try {
+                this._info = JSON.parse(localStorage.getItem('nchat_admin_info'));
+            } catch {
+                this._info = null;
+            }
+
+            return this._info;
+        },
+
+        setInfo(info) {
+            this._info = info;
+            localStorage.setItem('nchat_admin_info', JSON.stringify(info));
+        },
+
         clearToken() {
             this._token = null;
+            this._info = null;
+            this._lastId = 0;
+            this._conversationLastIds = {};
             localStorage.removeItem('nchat_admin_token');
+            localStorage.removeItem('nchat_admin_info');
         },
 
         isLoggedIn() {
@@ -224,8 +505,8 @@ const NChat = (() => {
         },
 
         headers() {
-            const t = this.getToken();
-            return t ? { 'Authorization': `Bearer ${t}` } : {};
+            const token = this.getToken();
+            return token ? { Authorization: `Bearer ${token}` } : {};
         },
 
         async login(email, password) {
@@ -233,77 +514,123 @@ const NChat = (() => {
             if (data.token) {
                 this.setToken(data.token);
             }
+            if (data.admin) {
+                this.setInfo(data.admin);
+            }
             return data;
         },
 
         async getConversations() {
-            return await request('GET', '/admin/conversations', null, this.headers());
+            return request('GET', '/admin/conversations', null, this.headers());
         },
 
         async getMessages(visitorId) {
-            const data = await request('GET', `/admin/conversations/${visitorId}/messages`, null, this.headers());
+            const data = await request(
+                'GET',
+                `/admin/conversations/${visitorId}/messages`,
+                null,
+                this.headers()
+            );
+
             if (data.messages && data.messages.length > 0) {
-                this._convLastId = data.messages[data.messages.length - 1].id;
+                data.messages.forEach(message => trackLatestIds(this, message));
             }
+
             return data;
         },
 
         async sendMessage(visitorId, body) {
             const clientId = uuid();
-            const data = await request('POST', `/admin/conversations/${visitorId}/messages`, { body, client_id: clientId }, this.headers());
-            if (data.message) {
-                this._convLastId = Math.max(this._convLastId, data.message.id);
+            const payload = {
+                body,
+                client_id: clientId,
+            };
+
+            const socketId = await Realtime.getSocketId('admin').catch(() => null);
+            if (socketId) {
+                payload.socket_id = socketId;
             }
+
+            const data = await request(
+                'POST',
+                `/admin/conversations/${visitorId}/messages`,
+                payload,
+                this.headers()
+            );
+
+            if (data.message) {
+                trackLatestIds(this, data.message);
+            }
+
             return { ...data, client_id: clientId };
         },
 
-        async poll() {
-            return await request('GET', `/admin/poll?since_id=${this._lastId}`, null, this.headers());
+        async markConversationRead(visitorId) {
+            return request(
+                'POST',
+                `/admin/conversations/${visitorId}/read`,
+                null,
+                this.headers()
+            );
         },
 
-        async pollConversation(visitorId) {
-            return await request('GET', `/admin/conversations/${visitorId}/poll?since_id=${this._convLastId}`, null, this.headers());
+        async subscribeToFeed(onMessage, slot = 'adminFeed') {
+            return Realtime.subscribe(slot, 'admin', REALTIME.adminFeedChannel, {
+                onMessage: event => {
+                    const message = event && event.message ? event.message : event;
+                    trackLatestIds(this, message);
+                    if (onMessage) {
+                        onMessage(event);
+                    }
+                },
+            });
         },
 
-        startGlobalPolling(onNewData) {
-            this.stopGlobalPolling();
-            this._pollTimer = setInterval(async () => {
-                try {
-                    const data = await this.poll();
-                    if (data.messages && data.messages.length > 0) {
-                        this._lastId = data.messages[data.messages.length - 1].id;
-                    }
-                    onNewData(data);
-                } catch (e) {
-                    if (e.status === 401) {
-                        this.clearToken();
-                        window.location.href = 'admin-login.html';
-                    }
+        unsubscribeFeed(slot = 'adminFeed') {
+            Realtime.unsubscribe(slot);
+        },
+
+        async subscribeToConversation(conversationId, handlers = {}, slot = 'adminConversation') {
+            return Realtime.subscribe(
+                slot,
+                'admin',
+                `${REALTIME.conversationPrefix}${conversationId}`,
+                {
+                    onMessage: event => {
+                        const message = event && event.message ? event.message : event;
+                        trackLatestIds(this, message);
+                        if (handlers.onMessage) {
+                            handlers.onMessage(event);
+                        }
+                    },
+                    onPresenceChange: handlers.onPresenceChange,
                 }
-            }, POLL_INTERVAL);
+            );
         },
 
-        stopGlobalPolling() {
-            if (this._pollTimer) { clearInterval(this._pollTimer); this._pollTimer = null; }
+        unsubscribeConversation(slot = 'adminConversation') {
+            Realtime.unsubscribe(slot);
         },
 
-        startConversationPolling(visitorId, onNewMessages) {
-            this.stopConversationPolling();
-            this._convPollTimer = setInterval(async () => {
-                try {
-                    const data = await this.pollConversation(visitorId);
-                    if (data.messages && data.messages.length > 0) {
-                        this._convLastId = data.messages[data.messages.length - 1].id;
-                        onNewMessages(data.messages, data.visitor_online);
-                    }
-                } catch (e) { /* silently retry */ }
-            }, POLL_INTERVAL);
+        async subscribeToPresence(onPresenceChange, slot = 'adminPresence') {
+            return Realtime.subscribe(slot, 'admin', REALTIME.adminPresenceChannel, {
+                onPresenceChange,
+            });
         },
 
-        stopConversationPolling() {
-            if (this._convPollTimer) { clearInterval(this._convPollTimer); this._convPollTimer = null; }
+        unsubscribePresence(slot = 'adminPresence') {
+            Realtime.unsubscribe(slot);
+        },
+
+        disconnectRealtime() {
+            Realtime.disconnect('admin');
         },
     };
 
-    return { Visitor, Admin: AdminAPI, API_BASE, POLL_INTERVAL };
+    return {
+        Visitor,
+        Admin: AdminAPI,
+        API_BASE,
+        REALTIME,
+    };
 })();

@@ -356,6 +356,7 @@
         // ── State ──
         let adminInfo = null;
         let visitorInfo = null;
+        let conversationId = null;
         let hasShownPopup = false;
         let messageCount = 0;
         const renderedIds = new Set();  // dedup: tracks all rendered message IDs
@@ -372,6 +373,12 @@
         const adminAvatarEl = document.getElementById('adminAvatar');
         const statusDot = document.getElementById('statusDot');
         const statusText = document.getElementById('statusText');
+        const headerStatus = document.querySelector('.header-status');
+
+        function hasAdminMember(snapshot) {
+            return Array.isArray(snapshot && snapshot.members)
+                && snapshot.members.some(member => String(member.id).startsWith('admin-'));
+        }
 
         // ── Init ──
         async function init() {
@@ -394,6 +401,7 @@
 
                 // Load existing messages
                 const msgData = await NChat.Visitor.getMessages();
+                conversationId = msgData.conversation_id || data.conversation_id;
                 if (msgData.messages.length === 0) {
                     welcomeCard.style.display = '';
                 } else {
@@ -406,8 +414,12 @@
                 scrollToBottom();
                 loadingScreen.classList.add('hidden');
 
-                // Start polling
-                NChat.Visitor.startPolling(onNewMessages);
+                updateAdminStatus(false);
+
+                await Promise.all([
+                    NChat.Visitor.subscribeToConversation(conversationId, { onMessage: onRealtimeMessage }),
+                    NChat.Visitor.subscribeToAdminPresence(onAdminPresence),
+                ]);
 
                 // Show save popup after 2nd message if info not saved
                 checkSavePopup();
@@ -451,6 +463,30 @@
         }
 
         // ── Send Message ──
+        function updateAdminStatus(isOnline) {
+            statusDot.classList.toggle('online', isOnline);
+            headerStatus.classList.toggle('online', isOnline);
+            statusText.textContent = isOnline ? 'online' : 'offline';
+        }
+
+        function onAdminPresence(snapshot) {
+            updateAdminStatus(hasAdminMember(snapshot));
+        }
+
+        function onRealtimeMessage(event) {
+            const message = event && event.message ? event.message : event;
+            if (!message) return;
+
+            if (appendMessage(message, true)) {
+                if (message.sender_type !== 'visitor' && conversationId) {
+                    NChat.Visitor.markConversationRead(conversationId).catch(() => {});
+                }
+                messageCount++;
+                checkSavePopup();
+                scrollToBottom();
+            }
+        }
+
         async function sendMessage() {
             const text = messageInput.value.trim();
             if (!text || isSending) return;
@@ -574,6 +610,9 @@
 
         // ── Boot ──
         adjustCanvasPadding();
+        window.addEventListener('beforeunload', () => {
+            NChat.Visitor.disconnectRealtime();
+        });
         init();
     </script>
 </body>

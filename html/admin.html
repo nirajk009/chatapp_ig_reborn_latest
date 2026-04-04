@@ -301,9 +301,12 @@
         // ── State ──
         let conversations = [];
         let activeVisitorId = null;
+        let activeConversationId = null;
         let searchQuery = '';
         const renderedMsgIds = new Set(); // dedup: tracks rendered message IDs in active chat
         let isSending = false;            // send lock
+        let adminPresenceReady = false;
+        let adminPresenceSnapshot = { members: [] };
 
         // ── DOM ──
         const convList = document.getElementById('convList');
@@ -320,11 +323,55 @@
         const totalBadge = document.getElementById('totalBadge');
         const searchInput = document.getElementById('searchInput');
 
+        function isVisitorOnline(visitorId, fallback = false) {
+            if (!visitorId) {
+                return fallback;
+            }
+
+            const memberId = `visitor-${visitorId}`;
+            const members = Array.isArray(adminPresenceSnapshot.members)
+                ? adminPresenceSnapshot.members
+                : [];
+
+            if (!adminPresenceReady) {
+                return fallback;
+            }
+
+            return members.some(member => String(member.id) === memberId);
+        }
+
+        function applyPresenceToConversations(items) {
+            return (items || []).map(item => {
+                if (!item.visitor) {
+                    return item;
+                }
+
+                return {
+                    ...item,
+                    visitor: {
+                        ...item.visitor,
+                        is_online: isVisitorOnline(item.visitor.id, item.visitor.is_online),
+                    },
+                };
+            });
+        }
+
+        function handlePresenceChange(snapshot) {
+            adminPresenceReady = true;
+            adminPresenceSnapshot = snapshot || { members: [] };
+            conversations = applyPresenceToConversations(conversations);
+            renderConversations();
+
+            if (activeVisitorId) {
+                updateActiveVisitorStatus(isVisitorOnline(activeVisitorId));
+            }
+        }
+
         // ── Load Conversations ──
         async function loadConversations() {
             try {
                 const data = await NChat.Admin.getConversations();
-                conversations = data.conversations;
+                conversations = applyPresenceToConversations(data.conversations);
                 renderConversations();
             } catch (err) {
                 if (err.status === 401) {
@@ -400,11 +447,37 @@
             }
         }
 
+        function updateActiveVisitorStatus(isOnline) {
+            chatStatus.textContent = isOnline ? 'online' : 'offline';
+            chatStatus.className = `chat-panel__status ${isOnline ? 'online' : ''}`;
+        }
+
+        function handleFeedMessage() {
+            loadConversations();
+        }
+
+        function handleConversationMessage(event) {
+            const message = event && event.message ? event.message : null;
+            const conversation = event && event.conversation ? event.conversation : null;
+
+            if (message && conversation && activeConversationId === conversation.id) {
+                if (appendChatMessage(message)) {
+                    if (message.sender_type === 'visitor' && activeVisitorId) {
+                        NChat.Admin.markConversationRead(activeVisitorId)
+                            .then(() => loadConversations())
+                            .catch(() => {});
+                    }
+                    scrollChatToBottom();
+                }
+            }
+        }
+
         // ── Open Chat ──
         async function openChat(visitorId) {
             activeVisitorId = visitorId;
-            NChat.Admin.stopConversationPolling();
-            renderedMsgIds.clear(); // clear dedup set for new conversation
+            activeConversationId = null;
+            renderedMsgIds.clear();
+            NChat.Admin.unsubscribeConversation();
 
             // Update UI
             chatEmpty.style.display = 'none';
@@ -419,11 +492,11 @@
             try {
                 const data = await NChat.Admin.getMessages(visitorId);
                 const visitor = data.visitor;
+                activeConversationId = data.conversation_id;
 
                 chatName.textContent = visitor.name || 'Visitor #' + visitor.id;
                 chatAvatar.textContent = (visitor.name || 'V').charAt(0).toUpperCase();
-                chatStatus.textContent = visitor.is_online ? 'online' : 'offline';
-                chatStatus.className = `chat-panel__status ${visitor.is_online ? 'online' : ''}`;
+                updateActiveVisitorStatus(isVisitorOnline(visitor.id, visitor.is_online));
 
                 // Render messages
                 chatMessages.innerHTML = '';
@@ -432,20 +505,8 @@
                     data.messages.forEach(m => appendChatMessage(m));
                 }
                 scrollChatToBottom();
-
-                // Start polling this conversation
-                NChat.Admin.startConversationPolling(visitorId, (msgs, online) => {
-                    let added = false;
-                    msgs.forEach(m => {
-                        if (appendChatMessage(m)) added = true;
-                    });
-                    if (added) scrollChatToBottom();
-
-                    chatStatus.textContent = online ? 'online' : 'offline';
-                    chatStatus.className = `chat-panel__status ${online ? 'online' : ''}`;
-
-                    // Also refresh conversation list
-                    loadConversations();
+                await NChat.Admin.subscribeToConversation(activeConversationId, {
+                    onMessage: handleConversationMessage,
                 });
 
             } catch (err) {
@@ -526,8 +587,9 @@
         // ── Back button (mobile) ──
         document.getElementById('chatBack').addEventListener('click', () => {
             chatPanel.classList.remove('open');
-            NChat.Admin.stopConversationPolling();
             activeVisitorId = null;
+            activeConversationId = null;
+            NChat.Admin.unsubscribeConversation();
         });
 
         // ── Search ──
@@ -538,16 +600,20 @@
 
         // ── Logout ──
         document.getElementById('logoutBtn').addEventListener('click', () => {
-            NChat.Admin.stopGlobalPolling();
-            NChat.Admin.stopConversationPolling();
+            NChat.Admin.disconnectRealtime();
             NChat.Admin.clearToken();
             window.location.href = 'admin-login.html';
         });
 
         // ── Global Polling (for new conversation updates) ──
-        NChat.Admin.startGlobalPolling((data) => {
-            // Refresh conversation list periodically
-            loadConversations();
+        NChat.Admin.subscribeToPresence(handlePresenceChange).catch(err => {
+            console.error('Presence subscribe error:', err);
+        });
+        NChat.Admin.subscribeToFeed(handleFeedMessage).catch(err => {
+            console.error('Realtime subscribe error:', err);
+        });
+        window.addEventListener('beforeunload', () => {
+            NChat.Admin.disconnectRealtime();
         });
 
         // ── Boot ──
