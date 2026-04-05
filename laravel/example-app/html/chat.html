@@ -221,6 +221,7 @@
             div.className = 'msg mine';
             div.dataset.clientId = clientId;
             div.dataset.pending = 'true';
+            div.dataset.senderType = 'visitor';
             div.innerHTML = `
                 <div class="msg__bubble">${escapeHtml(body)}</div>
                 <span class="msg__time">sending...</span>
@@ -228,6 +229,71 @@
             chatCanvas.insertBefore(div, typingIndicator);
             pendingMessages.set(clientId, div);
             return div;
+        }
+
+        function messageMetaText(msg, isMine) {
+            if (!msg) {
+                return '';
+            }
+
+            if (!isMine) {
+                return msg.time || '';
+            }
+
+            return msg.read_status
+                || NChat.formatStatusTime(
+                    (msg.is_read ? (msg.read_at || msg.created_at) : msg.created_at),
+                    msg.is_read ? 'Seen' : 'Sent',
+                    msg.is_read ? 'Seen' : 'Sent'
+                );
+        }
+
+        function renderStoredMessageMeta(div) {
+            if (!div) {
+                return;
+            }
+
+            const time = div.querySelector('.msg__time');
+            const createdAt = div.dataset.createdAt || '';
+            if (!time || !createdAt) {
+                return;
+            }
+
+            if (div.classList.contains('mine')) {
+                const isRead = div.dataset.isRead === 'true';
+                time.textContent = NChat.formatStatusTime(
+                    isRead ? (div.dataset.readAt || createdAt) : createdAt,
+                    isRead ? 'Seen' : 'Sent',
+                    isRead ? 'Seen' : 'Sent'
+                );
+                return;
+            }
+
+            time.textContent = NChat.formatLocalTime(createdAt, time.textContent || '');
+        }
+
+        function syncMessageMeta(div, msg, isMine) {
+            if (!div || !msg) {
+                return;
+            }
+
+            div.dataset.createdAt = msg.created_at || '';
+            div.dataset.readAt = msg.read_at || '';
+            div.dataset.isRead = msg.is_read ? 'true' : 'false';
+
+            if (isMine) {
+                renderStoredMessageMeta(div);
+                return;
+            }
+
+            const time = div.querySelector('.msg__time');
+            if (time) {
+                time.textContent = messageMetaText(msg, false);
+            }
+        }
+
+        function refreshMessageMeta() {
+            chatCanvas.querySelectorAll('.msg[data-id]').forEach(renderStoredMessageMeta);
         }
 
         function resolvePendingMessage(msg) {
@@ -245,18 +311,39 @@
 
             div.dataset.id = String(msg.id);
             delete div.dataset.pending;
+            div.dataset.senderType = msg.sender_type || 'visitor';
 
             if (bubble) {
                 bubble.textContent = msg.body;
             }
 
-            if (time) {
-                time.textContent = msg.time || '';
-            }
+            syncMessageMeta(div, msg, true);
 
             renderedIds.add(msg.id);
             pendingMessages.delete(msg.client_id);
             return true;
+        }
+
+        function applyReadReceipt(event) {
+            if (!event || Number(event.reader_id || 0) === Number(myInfo && myInfo.id)) {
+                return;
+            }
+
+            const lastReadMessageId = Number(event.last_read_message_id || 0);
+            if (!Number.isFinite(lastReadMessageId) || lastReadMessageId <= 0) {
+                return;
+            }
+
+            chatCanvas.querySelectorAll('.msg.mine[data-id]').forEach(div => {
+                const messageId = Number(div.dataset.id || 0);
+                if (!Number.isFinite(messageId) || messageId > lastReadMessageId) {
+                    return;
+                }
+
+                div.dataset.isRead = 'true';
+                div.dataset.readAt = event.read_at || '';
+                renderStoredMessageMeta(div);
+            });
         }
 
         // ── Init ──
@@ -275,6 +362,7 @@
                 // Render messages
                 if (data.messages) {
                     data.messages.forEach(m => appendMessage(m));
+                    refreshMessageMeta();
                 }
                 scrollToBottom();
 
@@ -283,6 +371,7 @@
                         NChat.Visitor.subscribeToConversation(conversationId, {
                             onMessage: onRealtimeMessage,
                             onTyping: onTypingEvent,
+                            onRead: applyReadReceipt,
                         }),
                         NChat.Visitor.subscribeToAdminPresence(onAdminPresence, 'visitorChatAdminPresence'),
                     ]);
@@ -290,6 +379,7 @@
                     await NChat.Visitor.subscribeToConversation(conversationId, {
                         onMessage: onRealtimeMessage,
                         onTyping: onTypingEvent,
+                        onRead: applyReadReceipt,
                         onPresenceChange: onConversationPresence,
                     });
                 }
@@ -435,10 +525,12 @@
             const div = document.createElement('div');
             div.className = `msg ${isMine ? 'mine' : 'theirs'}`;
             div.dataset.id = msg.id;
+            div.dataset.senderType = msg.sender_type;
             div.innerHTML = `
                 <div class="msg__bubble">${escapeHtml(msg.body)}</div>
                 <span class="msg__time">${msg.time || ''}</span>
             `;
+            syncMessageMeta(div, msg, isMine);
             chatCanvas.insertBefore(div, typingIndicator);
         }
 
@@ -508,6 +600,7 @@
             clearRemoteTypingTimer();
             NChat.Visitor.disconnectRealtime();
         });
+        window.setInterval(refreshMessageMeta, 30000);
 
         init();
     </script>

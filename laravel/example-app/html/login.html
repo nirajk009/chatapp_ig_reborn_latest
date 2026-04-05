@@ -597,10 +597,22 @@
 
     <script src="api.js"></script>
     <script>
-        // If already logged in, redirect
-        if (NChat.Visitor.isLoggedIn()) {
-            window.location.href = 'contacts.html';
+        function redirectAuthenticatedUser() {
+            if (NChat.Admin.isLoggedIn()) {
+                window.location.replace('admin.html');
+                return true;
+            }
+
+            if (NChat.Visitor.isLoggedIn()) {
+                window.location.replace('contacts.html');
+                return true;
+            }
+
+            return false;
         }
+
+        redirectAuthenticatedUser();
+        window.addEventListener('pageshow', redirectAuthenticatedUser);
 
         // Password Toggle
         const toggleBtn = document.getElementById('togglePassword');
@@ -640,9 +652,9 @@
                 try {
                     const result = await NChat.Visitor.login(email.value, password.value);
                     if (result.is_admin) {
-                        window.location.href = 'admin.html';
+                        window.location.replace('admin.html');
                     } else {
-                        window.location.href = 'contacts.html';
+                        window.location.replace('contacts.html');
                     }
                 } catch (err) {
                     btn.classList.remove('btn-primary--loading');

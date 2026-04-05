@@ -131,6 +131,14 @@
             display: none; background: none; border: none; color: var(--on-surface-variant);
             cursor: pointer; padding: 0.3rem; border-radius: 50;
         }
+        .chat-panel__identity {
+            display: flex; align-items: center; gap: 0.75rem; min-width: 0;
+            background: none; border: none; padding: 0; color: inherit;
+            font: inherit; text-align: left; cursor: pointer;
+        }
+        .chat-panel__identity:disabled { cursor: default; }
+        .chat-panel__identity:hover .chat-panel__name { color: var(--primary); }
+        .chat-panel__identity-info { min-width: 0; }
         .chat-panel__avatar {
             width: 2.25rem; height: 2.25rem; border-radius: 0.6rem;
             background: linear-gradient(135deg, var(--primary-container), var(--secondary-container));
@@ -143,6 +151,10 @@
             text-transform: uppercase; letter-spacing: 0.04em;
         }
         .chat-panel__status.online { color: var(--primary); }
+        .chat-panel__identity-hint {
+            font-size: 0.55rem; font-weight: 700; color: rgba(117,84,122,0.55);
+            letter-spacing: 0.08em; text-transform: uppercase; margin-top: 0.15rem;
+        }
 
         .chat-messages {
             flex: 1; overflow-y: auto; padding: 1.25rem; display: flex;
@@ -224,6 +236,57 @@
         .chat-empty .material-symbols-outlined { font-size: 3rem; color: var(--primary-container); }
         .chat-empty p { font-size: 0.9rem; }
 
+        .visitor-profile-modal {
+            position: fixed; inset: 0; z-index: 90; display: none; align-items: center; justify-content: center;
+            padding: 1rem; background: rgba(69,39,75,0.16); backdrop-filter: blur(10px);
+        }
+        .visitor-profile-modal.open { display: flex; }
+        .visitor-profile-card {
+            width: min(100%, 32rem); background: var(--surface); border-radius: 1.5rem;
+            padding: 1.25rem; box-shadow: 0 20px 60px rgba(69,39,75,0.18);
+            border: 1px solid rgba(204,165,208,0.18);
+        }
+        .visitor-profile-card__header {
+            display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .visitor-profile-card__eyebrow {
+            font-size: 0.625rem; font-weight: 700; color: var(--on-surface-variant);
+            letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 0.3rem;
+        }
+        .visitor-profile-card__title { font-size: 1.15rem; font-weight: 800; color: var(--on-surface); }
+        .visitor-profile-card__sub {
+            font-size: 0.8rem; color: var(--on-surface-variant); margin-top: 0.15rem;
+        }
+        .visitor-profile-loading,
+        .visitor-profile-error {
+            font-size: 0.85rem; color: var(--on-surface-variant);
+            background: var(--surface-container-low); border-radius: 1rem; padding: 0.9rem 1rem;
+        }
+        .visitor-profile-error {
+            color: var(--error); background: rgba(172,49,73,0.08);
+        }
+        .visitor-profile-grid {
+            display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem;
+            margin-top: 0.25rem;
+        }
+        .visitor-profile-field {
+            background: var(--surface-container-low); border-radius: 1rem; padding: 0.85rem 0.95rem;
+        }
+        .visitor-profile-field--full { grid-column: 1 / -1; }
+        .visitor-profile-label {
+            display: block; font-size: 0.625rem; font-weight: 700; color: var(--on-surface-variant);
+            letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 0.35rem;
+        }
+        .visitor-profile-value {
+            display: block; font-size: 0.88rem; color: var(--on-surface); line-height: 1.5;
+            word-break: break-word;
+        }
+        .visitor-profile-value--mono {
+            font-family: Consolas, "Courier New", monospace;
+            font-size: 0.8rem;
+        }
+
         /* ── Mobile: panel switching ── */
         @media (max-width: 768px) {
             .sidebar { max-width: 100%; }
@@ -287,11 +350,14 @@
                         <button class="chat-panel__back" id="chatBack">
                             <span class="material-symbols-outlined">arrow_back</span>
                         </button>
-                        <div class="chat-panel__avatar" id="chatAvatar">V</div>
-                        <div>
-                            <div class="chat-panel__name" id="chatName">Visitor</div>
-                            <div class="chat-panel__status" id="chatStatus">offline</div>
-                        </div>
+                        <button class="chat-panel__identity" id="visitorProfileBtn" type="button" disabled>
+                            <div class="chat-panel__avatar" id="chatAvatar">V</div>
+                            <div class="chat-panel__identity-info">
+                                <div class="chat-panel__name" id="chatName">Visitor</div>
+                                <div class="chat-panel__status" id="chatStatus">offline</div>
+                                <div class="chat-panel__identity-hint">Tap for details</div>
+                            </div>
+                        </button>
                     </div>
                 </div>
                 <div class="chat-messages" id="chatMessages"></div>
@@ -313,6 +379,61 @@
         </div>
     </div>
 
+    <div class="visitor-profile-modal" id="visitorProfileModal" aria-hidden="true">
+        <div class="visitor-profile-card">
+            <div class="visitor-profile-card__header">
+                <div>
+                    <div class="visitor-profile-card__eyebrow">Visitor Details</div>
+                    <div class="visitor-profile-card__title" id="visitorProfileTitle">Visitor</div>
+                    <div class="visitor-profile-card__sub" id="visitorProfileSubtitle">Latest connection info for this visitor.</div>
+                </div>
+                <button class="icon-btn" id="visitorProfileClose" title="Close">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <div class="visitor-profile-loading" id="visitorProfileLoading" hidden>Loading visitor details...</div>
+            <div class="visitor-profile-error" id="visitorProfileError" hidden></div>
+            <div class="visitor-profile-grid" id="visitorProfileContent" hidden>
+                <div class="visitor-profile-field">
+                    <span class="visitor-profile-label">Visitor</span>
+                    <span class="visitor-profile-value" id="visitorProfileName">-</span>
+                </div>
+                <div class="visitor-profile-field">
+                    <span class="visitor-profile-label">Username</span>
+                    <span class="visitor-profile-value" id="visitorProfileUsername">-</span>
+                </div>
+                <div class="visitor-profile-field">
+                    <span class="visitor-profile-label">Email</span>
+                    <span class="visitor-profile-value" id="visitorProfileEmail">-</span>
+                </div>
+                <div class="visitor-profile-field">
+                    <span class="visitor-profile-label">Stored Visit Records</span>
+                    <span class="visitor-profile-value" id="visitorProfileLogCount">0</span>
+                </div>
+                <div class="visitor-profile-field">
+                    <span class="visitor-profile-label">Latest IP Address</span>
+                    <span class="visitor-profile-value visitor-profile-value--mono" id="visitorProfileIp">-</span>
+                </div>
+                <div class="visitor-profile-field">
+                    <span class="visitor-profile-label">Last Seen</span>
+                    <span class="visitor-profile-value" id="visitorProfileLastSeen">-</span>
+                </div>
+                <div class="visitor-profile-field">
+                    <span class="visitor-profile-label">Latest Logged Visit</span>
+                    <span class="visitor-profile-value" id="visitorProfileLatestLog">-</span>
+                </div>
+                <div class="visitor-profile-field">
+                    <span class="visitor-profile-label">First Seen</span>
+                    <span class="visitor-profile-value" id="visitorProfileCreatedAt">-</span>
+                </div>
+                <div class="visitor-profile-field visitor-profile-field--full">
+                    <span class="visitor-profile-label">Navigator / User Agent</span>
+                    <span class="visitor-profile-value visitor-profile-value--mono" id="visitorProfileUserAgent">-</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="api.js"></script>
     <script>
         // ── Auth Guard ──
@@ -323,6 +444,7 @@
         // ── State ──
         let conversations = [];
         let activeVisitorId = null;
+        let activeVisitor = null;
         let activeConversationId = null;
         let searchQuery = '';
         const renderedMsgIds = new Set(); // dedup: tracks rendered message IDs in active chat
@@ -342,10 +464,27 @@
         const chatName = document.getElementById('chatName');
         const chatAvatar = document.getElementById('chatAvatar');
         const chatStatus = document.getElementById('chatStatus');
+        const visitorProfileBtn = document.getElementById('visitorProfileBtn');
         const totalBadge = document.getElementById('totalBadge');
         const searchInput = document.getElementById('searchInput');
         const typingIndicator = document.getElementById('typingIndicator');
         const typingText = document.getElementById('typingText');
+        const visitorProfileModal = document.getElementById('visitorProfileModal');
+        const visitorProfileClose = document.getElementById('visitorProfileClose');
+        const visitorProfileTitle = document.getElementById('visitorProfileTitle');
+        const visitorProfileSubtitle = document.getElementById('visitorProfileSubtitle');
+        const visitorProfileLoading = document.getElementById('visitorProfileLoading');
+        const visitorProfileError = document.getElementById('visitorProfileError');
+        const visitorProfileContent = document.getElementById('visitorProfileContent');
+        const visitorProfileName = document.getElementById('visitorProfileName');
+        const visitorProfileUsername = document.getElementById('visitorProfileUsername');
+        const visitorProfileEmail = document.getElementById('visitorProfileEmail');
+        const visitorProfileLogCount = document.getElementById('visitorProfileLogCount');
+        const visitorProfileIp = document.getElementById('visitorProfileIp');
+        const visitorProfileLastSeen = document.getElementById('visitorProfileLastSeen');
+        const visitorProfileLatestLog = document.getElementById('visitorProfileLatestLog');
+        const visitorProfileCreatedAt = document.getElementById('visitorProfileCreatedAt');
+        const visitorProfileUserAgent = document.getElementById('visitorProfileUserAgent');
         const pendingMessages = new Map();
         let activeVisitorOnline = false;
         let activeVisitorTyping = false;
@@ -385,6 +524,7 @@
             group.className = 'msg-group msg-group--sent';
             group.dataset.clientId = clientId;
             group.dataset.pending = 'true';
+            group.dataset.senderType = 'admin';
 
             const bubble = document.createElement('div');
             bubble.className = 'bubble bubble--sent';
@@ -399,6 +539,71 @@
             chatMessages.appendChild(group);
             pendingMessages.set(clientId, group);
             return group;
+        }
+
+        function messageMetaText(msg, isSent) {
+            if (!msg) {
+                return '';
+            }
+
+            if (!isSent) {
+                return msg.time || '';
+            }
+
+            return msg.read_status
+                || NChat.formatStatusTime(
+                    (msg.is_read ? (msg.read_at || msg.created_at) : msg.created_at),
+                    msg.is_read ? 'Seen' : 'Sent',
+                    msg.is_read ? 'Seen' : 'Sent'
+                );
+        }
+
+        function renderStoredMessageMeta(group) {
+            if (!group) {
+                return;
+            }
+
+            const ts = group.querySelector('.timestamp');
+            const createdAt = group.dataset.createdAt || '';
+            if (!ts || !createdAt) {
+                return;
+            }
+
+            if (group.classList.contains('msg-group--sent')) {
+                const isRead = group.dataset.isRead === 'true';
+                ts.textContent = NChat.formatStatusTime(
+                    isRead ? (group.dataset.readAt || createdAt) : createdAt,
+                    isRead ? 'Seen' : 'Sent',
+                    isRead ? 'Seen' : 'Sent'
+                );
+                return;
+            }
+
+            ts.textContent = NChat.formatLocalTime(createdAt, ts.textContent || '');
+        }
+
+        function syncMessageMeta(group, msg, isSent) {
+            if (!group || !msg) {
+                return;
+            }
+
+            group.dataset.createdAt = msg.created_at || '';
+            group.dataset.readAt = msg.read_at || '';
+            group.dataset.isRead = msg.is_read ? 'true' : 'false';
+
+            if (isSent) {
+                renderStoredMessageMeta(group);
+                return;
+            }
+
+            const ts = group.querySelector('.timestamp');
+            if (ts) {
+                ts.textContent = messageMetaText(msg, false);
+            }
+        }
+
+        function refreshChatMessageMeta() {
+            chatMessages.querySelectorAll('.msg-group[data-id]').forEach(renderStoredMessageMeta);
         }
 
         function resolvePendingMessage(msg) {
@@ -416,18 +621,136 @@
 
             group.dataset.id = String(msg.id);
             delete group.dataset.pending;
+            group.dataset.senderType = msg.sender_type || 'admin';
 
             if (bubble) {
                 bubble.textContent = msg.body;
             }
 
-            if (ts) {
-                ts.textContent = msg.time || '';
-            }
+            syncMessageMeta(group, msg, true);
 
             renderedMsgIds.add(msg.id);
             pendingMessages.delete(msg.client_id);
             return true;
+        }
+
+        function applyReadReceipt(event) {
+            const adminInfo = NChat.Admin.getInfo();
+            if (!event || Number(event.reader_id || 0) === Number(adminInfo && adminInfo.id)) {
+                return;
+            }
+
+            const lastReadMessageId = Number(event.last_read_message_id || 0);
+            if (!Number.isFinite(lastReadMessageId) || lastReadMessageId <= 0) {
+                return;
+            }
+
+            chatMessages.querySelectorAll('.msg-group--sent[data-id]').forEach(group => {
+                const messageId = Number(group.dataset.id || 0);
+                if (!Number.isFinite(messageId) || messageId > lastReadMessageId) {
+                    return;
+                }
+
+                group.dataset.isRead = 'true';
+                group.dataset.readAt = event.read_at || '';
+                renderStoredMessageMeta(group);
+            });
+        }
+
+        function formatProfileDate(timestamp, fallback = 'Not available') {
+            if (!timestamp) {
+                return fallback;
+            }
+
+            const date = new Date(timestamp);
+            if (Number.isNaN(date.getTime())) {
+                return fallback;
+            }
+
+            return date.toLocaleString(undefined, {
+                dateStyle: 'medium',
+                timeStyle: 'short',
+            });
+        }
+
+        function renderVisitorProfile(visitor) {
+            const latestAccess = visitor && visitor.latest_access ? visitor.latest_access : {};
+
+            visitorProfileTitle.textContent = visitor && visitor.name
+                ? visitor.name
+                : `Visitor #${activeVisitorId || ''}`.trim();
+            visitorProfileSubtitle.textContent = visitor && visitor.email
+                ? visitor.email
+                : 'Latest connection info for this visitor.';
+            visitorProfileName.textContent = visitor && visitor.name ? visitor.name : 'Unknown visitor';
+            visitorProfileUsername.textContent = visitor && visitor.username ? `@${visitor.username}` : 'Guest visitor';
+            visitorProfileEmail.textContent = visitor && visitor.email ? visitor.email : 'Not provided';
+            visitorProfileLogCount.textContent = String(visitor && typeof visitor.access_log_count !== 'undefined'
+                ? visitor.access_log_count
+                : 0);
+            visitorProfileIp.textContent = latestAccess.ip_address || 'Not captured yet';
+            visitorProfileLastSeen.textContent = formatProfileDate(
+                visitor && visitor.last_seen_at ? visitor.last_seen_at : null,
+                'Unknown'
+            );
+            visitorProfileLatestLog.textContent = formatProfileDate(
+                latestAccess.logged_at || null,
+                'No stored visits yet'
+            );
+            visitorProfileCreatedAt.textContent = formatProfileDate(
+                visitor && visitor.created_at ? visitor.created_at : null,
+                'Unknown'
+            );
+            visitorProfileUserAgent.textContent = latestAccess.user_agent || 'Not captured yet';
+        }
+
+        function closeVisitorProfile() {
+            visitorProfileModal.classList.remove('open');
+            visitorProfileModal.setAttribute('aria-hidden', 'true');
+            document.body.style.overflow = '';
+            visitorProfileLoading.hidden = true;
+            visitorProfileError.hidden = true;
+        }
+
+        async function openVisitorProfile() {
+            if (!activeVisitorId) {
+                return;
+            }
+
+            const requestedVisitorId = activeVisitorId;
+            visitorProfileModal.classList.add('open');
+            visitorProfileModal.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden';
+            visitorProfileError.hidden = true;
+
+            if (activeVisitor) {
+                renderVisitorProfile(activeVisitor);
+                visitorProfileContent.hidden = false;
+                visitorProfileLoading.hidden = true;
+            } else {
+                visitorProfileContent.hidden = true;
+                visitorProfileLoading.hidden = false;
+            }
+
+            try {
+                const data = await NChat.Admin.getVisitorProfile(requestedVisitorId);
+                if (requestedVisitorId !== activeVisitorId) {
+                    return;
+                }
+
+                activeVisitor = data.visitor || activeVisitor;
+                renderVisitorProfile(activeVisitor);
+                visitorProfileContent.hidden = false;
+                visitorProfileLoading.hidden = true;
+                visitorProfileError.hidden = true;
+            } catch (err) {
+                if (visitorProfileContent.hidden) {
+                    visitorProfileError.textContent = 'Could not load visitor details right now.';
+                    visitorProfileError.hidden = false;
+                }
+                visitorProfileLoading.hidden = true;
+                console.error('Visitor profile error:', err);
+            }
         }
 
         function applyPresenceToConversations(items) {
@@ -509,7 +832,9 @@
                 const preview = c.last_message
                     ? (c.last_message.sender_type === 'admin' ? 'You: ' : '') + c.last_message.body
                     : 'No messages yet';
-                const time = c.last_message ? c.last_message.time : '';
+                const time = c.last_message
+                    ? NChat.formatLocalTime(c.last_message.created_at, c.last_message.time || '')
+                    : '';
 
                 el.innerHTML = `
                     <div class="conv-avatar">
@@ -543,6 +868,9 @@
 
         function updateActiveVisitorStatus(isOnline) {
             activeVisitorOnline = !!isOnline;
+            if (activeVisitor) {
+                activeVisitor.is_online = !!isOnline;
+            }
             renderActiveVisitorStatus();
         }
 
@@ -674,12 +1002,15 @@
         // ── Open Chat ──
         async function openChat(visitorId) {
             activeVisitorId = visitorId;
+            activeVisitor = null;
             activeConversationId = null;
             renderedMsgIds.clear();
             pendingMessages.clear();
             clearRemoteTypingTimer();
             hideTypingIndicator();
             stopLocalTyping();
+            closeVisitorProfile();
+            visitorProfileBtn.disabled = true;
             NChat.Admin.unsubscribeConversation();
 
             // Update UI
@@ -695,7 +1026,9 @@
             try {
                 const data = await NChat.Admin.getMessages(visitorId);
                 const visitor = data.visitor;
+                activeVisitor = visitor;
                 activeConversationId = data.conversation_id;
+                visitorProfileBtn.disabled = false;
 
                 chatName.textContent = visitor.name || 'Visitor #' + visitor.id;
                 chatAvatar.textContent = (visitor.name || 'V').charAt(0).toUpperCase();
@@ -706,11 +1039,13 @@
                 if (data.messages.length > 0) {
                     addDayDivider('Today');
                     data.messages.forEach(m => appendChatMessage(m));
+                    refreshChatMessageMeta();
                 }
                 scrollChatToBottom();
                 await NChat.Admin.subscribeToConversation(activeConversationId, {
                     onMessage: handleConversationMessage,
                     onTyping: onTypingEvent,
+                    onRead: applyReadReceipt,
                 });
 
             } catch (err) {
@@ -728,6 +1063,8 @@
             const isSent = msg.sender_type === 'admin';
             const group = document.createElement('div');
             group.className = `msg-group msg-group--${isSent ? 'sent' : 'received'}`;
+            group.dataset.id = String(msg.id);
+            group.dataset.senderType = msg.sender_type;
 
             const bubble = document.createElement('div');
             bubble.className = `bubble bubble--${isSent ? 'sent' : 'received'}`;
@@ -735,10 +1072,11 @@
 
             const ts = document.createElement('span');
             ts.className = 'timestamp';
-            ts.textContent = msg.time;
+            ts.textContent = msg.time || '';
 
             group.appendChild(bubble);
             group.appendChild(ts);
+            syncMessageMeta(group, msg, isSent);
             chatMessages.appendChild(group);
             return true;
         }
@@ -794,16 +1132,31 @@
         });
         chatInput.addEventListener('input', handleTypingInput);
         chatInput.addEventListener('blur', stopLocalTyping);
+        visitorProfileBtn.addEventListener('click', openVisitorProfile);
+        visitorProfileClose.addEventListener('click', closeVisitorProfile);
+        visitorProfileModal.addEventListener('click', event => {
+            if (event.target === visitorProfileModal) {
+                closeVisitorProfile();
+            }
+        });
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape') {
+                closeVisitorProfile();
+            }
+        });
 
         // ── Back button (mobile) ──
         document.getElementById('chatBack').addEventListener('click', () => {
             chatPanel.classList.remove('open');
             activeVisitorId = null;
+            activeVisitor = null;
             activeConversationId = null;
             pendingMessages.clear();
             stopLocalTyping();
             clearRemoteTypingTimer();
             hideTypingIndicator();
+            closeVisitorProfile();
+            visitorProfileBtn.disabled = true;
             NChat.Admin.unsubscribeConversation();
         });
 
@@ -815,6 +1168,7 @@
 
         // ── Logout ──
         document.getElementById('logoutBtn').addEventListener('click', () => {
+            closeVisitorProfile();
             NChat.Admin.disconnectRealtime();
             NChat.Admin.clearToken();
             window.location.href = 'admin-login.html';
@@ -828,12 +1182,17 @@
             console.error('Realtime subscribe error:', err);
         });
         window.addEventListener('beforeunload', () => {
+            closeVisitorProfile();
             stopLocalTyping();
             clearRemoteTypingTimer();
             NChat.Admin.disconnectRealtime();
         });
 
         // ── Boot ──
+        window.setInterval(() => {
+            renderConversations();
+            refreshChatMessageMeta();
+        }, 30000);
         loadConversations();
     </script>
 </body>

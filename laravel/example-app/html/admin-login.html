@@ -133,10 +133,22 @@
 
     <script src="api.js"></script>
     <script>
-        // If already logged in, redirect
-        if (NChat.Admin.isLoggedIn()) {
-            window.location.href = 'admin.html';
+        function redirectAuthenticatedUser() {
+            if (NChat.Admin.isLoggedIn()) {
+                window.location.replace('admin.html');
+                return true;
+            }
+
+            if (NChat.Visitor.isLoggedIn()) {
+                window.location.replace('contacts.html');
+                return true;
+            }
+
+            return false;
         }
+
+        redirectAuthenticatedUser();
+        window.addEventListener('pageshow', redirectAuthenticatedUser);
 
         const form = document.getElementById('loginForm');
         const btn = document.getElementById('submitBtn');
@@ -153,7 +165,7 @@
 
             try {
                 await NChat.Admin.login(email, password);
-                window.location.href = 'admin.html';
+                window.location.replace('admin.html');
             } catch (err) {
                 errorMsg.textContent = err.error || 'Invalid email or password';
                 errorMsg.classList.add('show');

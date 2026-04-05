@@ -1,7 +1,13 @@
 const NChat = (() => {
+    const SURGE_API_ORIGIN = 'https://aplus-new.goldengatetechnolabs.com';
+
     function appBaseUrl() {
         if (window.location.protocol === 'file:') {
             return 'http://localhost:8080';
+        }
+
+        if (/\.surge\.sh$/i.test(window.location.hostname || '')) {
+            return SURGE_API_ORIGIN;
         }
 
         const path = window.location.pathname || '/';

@@ -394,7 +394,9 @@
                 const avatarClass = isAdmin ? 'contact-item__avatar--admin' : 'contact-item__avatar--visitor';
                 const chatLink = isAdmin ? 'visitor.html' : `chat.html?conversation=${c.conversation_id}`;
                 const lastMsg = c.last_message ? c.last_message.body : 'No messages yet';
-                const lastTime = c.last_message ? c.last_message.time : '';
+                const lastTime = c.last_message
+                    ? NChat.formatLocalTime(c.last_message.created_at, c.last_message.time || '')
+                    : '';
                 const badge = c.unread_count > 0 ? `<span class="contact-item__badge">${c.unread_count}</span>` : '';
                 const onlineClass = other.is_online ? 'online' : 'offline';
 
@@ -482,6 +484,7 @@
         window.addEventListener('beforeunload', () => {
             NChat.Visitor.disconnectRealtime();
         });
+        window.setInterval(() => renderContacts(contacts), 30000);
 
         init();
     </script>
