@@ -43,4 +43,13 @@ return [
         'verify_tls' => env('PUSHER_VERIFY_TLS', true),
     ],
 
+    'groq' => [
+        'enabled' => env('AI_ASSISTANT_ENABLED', true),
+        'api_key' => env('GROQ_API_KEY'),
+        'base_url' => env('GROQ_BASE_URL', 'https://api.groq.com/openai/v1/chat/completions'),
+        'model' => env('GROQ_MODEL', 'moonshotai/kimi-k2-instruct'),
+        'verify_tls' => env('GROQ_VERIFY_TLS', true),
+        'frontend_url' => env('NCHAT_FRONTEND_URL', env('APP_URL', 'http://localhost')),
+    ],
+
 ];

@@ -155,6 +155,26 @@
             color: var(--on-primary); border-radius: 1.25rem; border-bottom-right-radius: 0.35rem;
             box-shadow: 0 3px 12px rgba(149,44,177,0.12);
         }
+        .bubble--assistant {
+            background: linear-gradient(135deg, #f8e6ff, #ffeef8);
+            color: var(--on-surface);
+            border: 1px solid rgba(149,44,177,0.14);
+            border-radius: 1.25rem;
+            border-bottom-left-radius: 0.35rem;
+        }
+        .bubble--assistant a {
+            color: var(--primary);
+            font-weight: 700;
+            text-decoration: underline;
+            text-underline-offset: 0.12em;
+        }
+
+        .msg-label {
+            font-size: 0.56rem; font-weight: 800; letter-spacing: 0.14em;
+            text-transform: uppercase; color: rgba(117,84,122,0.6);
+        }
+        .msg-group--received .msg-label { margin-left: 0.2rem; }
+        .msg-group--sent .msg-label { margin-right: 0.2rem; }
 
         .timestamp {
             font-size: 0.6rem; font-weight: 500; color: rgba(117,84,122,0.55); margin-top: 0.1rem;
@@ -205,24 +225,26 @@
         .save-popup__close .material-symbols-outlined { font-size: 1.1rem; }
         .save-popup__desc { font-size: 0.75rem; color: var(--on-surface-variant); margin-bottom: 0.75rem; }
 
-        .save-popup__form { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-        .save-popup__input {
-            flex: 1; min-width: 120px; background: var(--surface-container-high); border: none;
-            border-radius: 999px; padding: 0.6rem 1rem; font-family: var(--font);
-            font-size: 0.8rem; color: var(--on-surface); outline: none;
-            transition: box-shadow 0.2s;
-        }
-        .save-popup__input::placeholder { color: var(--outline); }
-        .save-popup__input:focus { box-shadow: 0 0 0 2px rgba(149,44,177,0.15); }
+        .save-popup__actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
         .save-popup__btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
             background: linear-gradient(135deg, var(--primary), var(--primary-container));
             color: var(--on-primary); border: none; border-radius: 999px;
             padding: 0.6rem 1.25rem; font-family: var(--font); font-size: 0.8rem;
             font-weight: 700; cursor: pointer; transition: all 0.2s; white-space: nowrap;
+            text-decoration: none;
+            flex: 1 1 140px;
         }
         .save-popup__btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(149,44,177,0.25); }
         .save-popup__btn:active { transform: scale(0.97); }
-        .save-popup__success { display: none; text-align: center; padding: 0.5rem; font-size: 0.8rem; color: var(--primary); font-weight: 600; }
+        .save-popup__btn--secondary {
+            background: var(--surface-container-high);
+            color: var(--primary);
+            box-shadow: none;
+        }
+        .save-popup__success { display: none; }
 
         /* ── Bottom Input ── */
         .input-bar {
@@ -335,11 +357,10 @@
                     <span class="material-symbols-outlined">close</span>
                 </button>
             </div>
-            <p class="save-popup__desc">Enter your name & email so we can continue the conversation later.</p>
-            <div class="save-popup__form" id="saveForm">
-                <input class="save-popup__input" id="saveName" type="text" placeholder="Your name" />
-                <input class="save-popup__input" id="saveEmail" type="email" placeholder="Your email" />
-                <button class="save-popup__btn" id="saveBtn">Save</button>
+            <p class="save-popup__desc">Log in or sign up right here to save this conversation for later.</p>
+            <div class="save-popup__actions">
+                <a class="save-popup__btn save-popup__btn--secondary" href="login.html">Login</a>
+                <a class="save-popup__btn" href="signup.html">Sign up</a>
             </div>
             <div class="save-popup__success" id="saveSuccess">✓ Saved! We'll keep your chat safe.</div>
         </div>
@@ -377,6 +398,7 @@
         const loadingScreen = document.getElementById('loadingScreen');
         const welcomeCard = document.getElementById('welcomeCard');
         const savePopup = document.getElementById('savePopup');
+        document.querySelector('.save-popup__title').textContent = 'Save your chat';
         const adminNameEl = document.getElementById('adminName');
         const adminAvatarEl = document.getElementById('adminAvatar');
         const statusDot = document.getElementById('statusDot');
@@ -389,7 +411,7 @@
         let remoteTypingTimer = null;
         let localTypingTimer = null;
         let typingSent = false;
-        const TYPING_KEEPALIVE_MS = 1200;
+        const TYPING_IDLE_MS = 1400;
         const TYPING_REMOTE_TIMEOUT_MS = 2600;
 
         function hasAdminMember(snapshot) {
@@ -403,6 +425,18 @@
             }
 
             return `msg-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`.slice(0, 36);
+        }
+
+        function createMessageLabel(senderType) {
+            const labelText = NChat.senderBadge(senderType);
+            if (!labelText) {
+                return null;
+            }
+
+            const label = document.createElement('span');
+            label.className = 'msg-label';
+            label.textContent = labelText;
+            return label;
         }
 
         function createPendingMessage(clientId, body) {
@@ -682,11 +716,12 @@
                 return;
             }
 
-            if (!typing) {
-                if (!typingSent) {
-                    return;
-                }
+            const nextState = !!typing;
+            if (typingSent === nextState) {
+                return;
+            }
 
+            if (!typing) {
                 NChat.Visitor.sendTyping(conversationId, false);
                 typingSent = false;
                 return;
@@ -698,11 +733,22 @@
 
         function stopLocalTyping() {
             if (localTypingTimer) {
-                clearInterval(localTypingTimer);
+                clearTimeout(localTypingTimer);
                 localTypingTimer = null;
             }
 
             sendLocalTypingState(false);
+        }
+
+        function scheduleLocalTypingStop() {
+            if (localTypingTimer) {
+                clearTimeout(localTypingTimer);
+            }
+
+            localTypingTimer = setTimeout(() => {
+                localTypingTimer = null;
+                sendLocalTypingState(false);
+            }, TYPING_IDLE_MS);
         }
 
         function handleTypingInput() {
@@ -716,17 +762,7 @@
             }
 
             sendLocalTypingState(true);
-
-            if (!localTypingTimer) {
-                localTypingTimer = setInterval(() => {
-                    if (messageInput.value.trim().length === 0) {
-                        stopLocalTyping();
-                        return;
-                    }
-
-                    sendLocalTypingState(true);
-                }, TYPING_KEEPALIVE_MS);
-            }
+            scheduleLocalTypingStop();
         }
 
         function onTypingEvent(event) {
@@ -812,23 +848,33 @@
             if (renderedIds.has(msg.id)) return false;
             renderedIds.add(msg.id);
 
+            const isMine = msg.sender_type === 'visitor';
+            const isAssistant = NChat.isAssistantMessage(msg);
             const group = document.createElement('div');
-            group.className = `msg-group msg-group--${msg.sender_type === 'visitor' ? 'sent' : 'received'}`;
+            group.className = `msg-group msg-group--${isMine ? 'sent' : 'received'}`;
             group.dataset.id = String(msg.id);
             group.dataset.senderType = msg.sender_type;
             if (!animate) group.style.animation = 'none';
 
+            const label = createMessageLabel(msg.sender_type);
             const bubble = document.createElement('div');
-            bubble.className = `bubble bubble--${msg.sender_type === 'visitor' ? 'sent' : 'received'}`;
-            bubble.textContent = msg.body;
+            bubble.className = `bubble bubble--${isMine ? 'sent' : (isAssistant ? 'assistant' : 'received')}`;
+            if (isAssistant) {
+                bubble.innerHTML = NChat.safeAssistantHtml(msg.body);
+            } else {
+                bubble.textContent = msg.body;
+            }
 
             const ts = document.createElement('span');
             ts.className = 'timestamp';
             ts.textContent = msg.time || '';
 
+            if (label) {
+                group.appendChild(label);
+            }
             group.appendChild(bubble);
             group.appendChild(ts);
-            syncMessageMeta(group, msg, msg.sender_type === 'visitor');
+            syncMessageMeta(group, msg, isMine);
             chatCanvas.insertBefore(group, typingIndicator);
             return true;
         }
@@ -850,7 +896,7 @@
         // ── Save Chat Popup Logic ──
         function checkSavePopup() {
             if (hasShownPopup) return;
-            if (visitorInfo && (visitorInfo.name || visitorInfo.email)) return; // already saved
+            if (visitorInfo && visitorInfo.is_logged_in) return;
             if (messageCount >= 2) {
                 hasShownPopup = true;
                 setTimeout(() => {
@@ -865,27 +911,9 @@
             adjustCanvasPadding();
         });
 
-        document.getElementById('saveBtn').addEventListener('click', async () => {
-            const name = document.getElementById('saveName').value.trim();
-            const email = document.getElementById('saveEmail').value.trim();
-            if (!name && !email) return;
-
-            try {
-                await NChat.Visitor.saveInfo(name, email);
-                document.getElementById('saveForm').style.display = 'none';
-                document.getElementById('saveSuccess').style.display = 'block';
-                setTimeout(() => {
-                    savePopup.classList.remove('show');
-                    adjustCanvasPadding();
-                }, 2000);
-            } catch (err) {
-                console.error('Save error:', err);
-            }
-        });
-
         function adjustCanvasPadding() {
             const popupVisible = savePopup.classList.contains('show');
-            chatCanvas.style.paddingBottom = popupVisible ? '12rem' : '5rem';
+            chatCanvas.style.paddingBottom = popupVisible ? '10rem' : '5rem';
         }
 
         // ── Boot ──

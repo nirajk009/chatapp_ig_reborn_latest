@@ -25,6 +25,11 @@ class Conversation extends Model
         return $this->hasOne(Message::class)->latestOfMany();
     }
 
+    public function aiMemory()
+    {
+        return $this->hasOne(ConversationAiMemory::class);
+    }
+
     public function unreadCountFor(int $userId, string $userType): int
     {
         return $this->messages()

@@ -8,6 +8,7 @@ use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\Visitor;
 use App\Services\RealtimeService;
+use App\Services\VisitorAutoReplyService;
 use App\Support\RealtimeChannels;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -321,7 +322,11 @@ class VisitorChatController extends Controller
 
     // ─── Send Message (to a conversation) ───
 
-    public function sendMessage(Request $request, RealtimeService $realtime): JsonResponse
+    public function sendMessage(
+        Request $request,
+        RealtimeService $realtime,
+        VisitorAutoReplyService $autoReply
+    ): JsonResponse
     {
         $visitor = $this->resolveVisitor($request);
         if (!$visitor) return response()->json(['error' => 'Invalid token'], 401);
@@ -360,6 +365,15 @@ class VisitorChatController extends Controller
                 $this->messagePayload($message, $conv),
                 $request->input('socket_id')
             );
+
+            if ($conv->type === 'visitor_admin') {
+                $autoReply->queueAutoReply(
+                    $conv->id,
+                    $message->id,
+                    $request->headers->get('Origin'),
+                    $request->headers->get('Referer')
+                );
+            }
         }
 
         return response()->json([

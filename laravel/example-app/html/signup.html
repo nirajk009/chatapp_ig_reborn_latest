@@ -315,32 +315,6 @@
             display: block;
         }
 
-        /* Password strength bar */
-        .password-strength {
-            height: 3px;
-            border-radius: 2px;
-            margin: 0.25rem 1rem 0;
-            background: rgba(204, 165, 208, 0.2);
-            overflow: hidden;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-        }
-
-        .password-strength--visible {
-            opacity: 1;
-        }
-
-        .password-strength__bar {
-            height: 100%;
-            border-radius: 2px;
-            width: 0%;
-            transition: all 0.4s ease;
-        }
-
-        .password-strength__bar--weak { width: 33%; background: var(--error); }
-        .password-strength__bar--medium { width: 66%; background: #e6a817; }
-        .password-strength__bar--strong { width: 100%; background: #3cb371; }
-
         /* --- Submit Button --- */
         .btn-primary {
             display: flex;
@@ -595,9 +569,6 @@
                             <span class="material-symbols-outlined">visibility_off</span>
                         </button>
                     </div>
-                    <div class="password-strength" id="strengthMeter">
-                        <div class="password-strength__bar" id="strengthBar"></div>
-                    </div>
                     <span class="input-error-msg" id="passwordError">Password must be at least 6 characters</span>
                 </div>
 
@@ -655,32 +626,6 @@
             const isPassword = passwordInput.type === 'password';
             passwordInput.type = isPassword ? 'text' : 'password';
             toggleBtn.querySelector('.material-symbols-outlined').textContent = isPassword ? 'visibility' : 'visibility_off';
-        });
-
-        // Password Strength Meter
-        passwordInput.addEventListener('input', () => {
-            const val = passwordInput.value;
-            const meter = document.getElementById('strengthMeter');
-            const bar = document.getElementById('strengthBar');
-
-            if (val.length === 0) {
-                meter.classList.remove('password-strength--visible');
-                bar.className = 'password-strength__bar';
-                return;
-            }
-
-            meter.classList.add('password-strength--visible');
-
-            let strength = 0;
-            if (val.length >= 6) strength++;
-            if (val.length >= 10) strength++;
-            if (/[A-Z]/.test(val) && /[0-9]/.test(val)) strength++;
-            if (/[^A-Za-z0-9]/.test(val)) strength++;
-
-            bar.className = 'password-strength__bar';
-            if (strength <= 1) bar.classList.add('password-strength__bar--weak');
-            else if (strength <= 2) bar.classList.add('password-strength__bar--medium');
-            else bar.classList.add('password-strength__bar--strong');
         });
 
         // Form Validation & Signup

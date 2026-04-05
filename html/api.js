@@ -416,6 +416,82 @@ const NChat = (() => {
         return normalizeMessage(event);
     }
 
+    function plainText(value) {
+        if (typeof value !== 'string' || value === '') {
+            return '';
+        }
+
+        const container = document.createElement('div');
+        container.innerHTML = value;
+        return container.textContent || container.innerText || '';
+    }
+
+    function safeAssistantHtml(value) {
+        if (typeof value !== 'string' || value === '') {
+            return '';
+        }
+
+        const input = document.createElement('div');
+        input.innerHTML = value;
+
+        const output = document.createElement('span');
+
+        const appendNode = (node, parent) => {
+            if (node.nodeType === Node.TEXT_NODE) {
+                parent.appendChild(document.createTextNode(node.textContent || ''));
+                return;
+            }
+
+            if (node.nodeType !== Node.ELEMENT_NODE) {
+                return;
+            }
+
+            if (node.tagName === 'A') {
+                const href = node.getAttribute('href') || '';
+                if (/^https?:\/\//i.test(href)) {
+                    const link = document.createElement('a');
+                    link.href = href;
+                    link.target = '_self';
+                    link.rel = 'noopener noreferrer';
+                    link.textContent = node.textContent || href;
+                    parent.appendChild(link);
+                    return;
+                }
+            }
+
+            Array.from(node.childNodes).forEach(child => appendNode(child, parent));
+        };
+
+        Array.from(input.childNodes).forEach(node => appendNode(node, output));
+        return output.innerHTML;
+    }
+
+    function isAssistantMessage(message) {
+        return !!message && message.sender_type === 'assistant';
+    }
+
+    function conversationPreview(lastMessage, viewerRole = 'visitor') {
+        if (!lastMessage) {
+            return 'No messages yet';
+        }
+
+        const body = plainText(lastMessage.body);
+
+        if (lastMessage.sender_type === 'assistant') {
+            return `AI: ${body}`;
+        }
+
+        if (viewerRole === 'admin' && lastMessage.sender_type === 'admin') {
+            return `You: ${body}`;
+        }
+
+        return body;
+    }
+
+    function senderBadge(senderType) {
+        return senderType === 'assistant' ? 'AI assistant' : '';
+    }
+
     function typingPayload(role, info, conversationId, typing) {
         const fallbackName = role === 'admin' ? 'Admin' : 'Visitor';
 
@@ -909,5 +985,10 @@ const NChat = (() => {
         REALTIME,
         formatLocalTime,
         formatStatusTime,
+        plainText,
+        safeAssistantHtml,
+        isAssistantMessage,
+        conversationPreview,
+        senderBadge,
     };
 })();

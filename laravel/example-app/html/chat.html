@@ -89,6 +89,21 @@
             background: var(--surface-container-high);
             color: var(--on-surface); border-bottom-left-radius: 0.25rem;
         }
+        .msg.theirs .msg__bubble--assistant {
+            background: linear-gradient(135deg, #f8e6ff, #ffeef8);
+            border: 1px solid rgba(149,44,177,0.14);
+        }
+        .msg.theirs .msg__bubble--assistant a {
+            color: var(--primary);
+            font-weight: 700;
+            text-decoration: underline;
+            text-underline-offset: 0.12em;
+        }
+        .msg__label {
+            font-size: 0.55rem; font-weight: 800; letter-spacing: 0.14em;
+            text-transform: uppercase; color: rgba(117,84,122,0.6);
+            padding: 0 0.5rem; margin-bottom: 0.15rem;
+        }
         .msg__time { font-size: 0.55rem; color: var(--on-surface-variant); margin-top: 0.2rem; padding: 0 0.5rem; }
 
         .typing-indicator {
@@ -200,7 +215,7 @@
         let remoteTypingTimer = null;
         let localTypingTimer = null;
         let typingSent = false;
-        const TYPING_KEEPALIVE_MS = 1200;
+        const TYPING_IDLE_MS = 1400;
         const TYPING_REMOTE_TIMEOUT_MS = 2600;
 
         function hasMember(snapshot, memberId) {
@@ -214,6 +229,18 @@
             }
 
             return `msg-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`.slice(0, 36);
+        }
+
+        function createMessageLabel(senderType) {
+            const labelText = NChat.senderBadge(senderType);
+            if (!labelText) {
+                return null;
+            }
+
+            const label = document.createElement('span');
+            label.className = 'msg__label';
+            label.textContent = labelText;
+            return label;
         }
 
         function createPendingMessage(clientId, body) {
@@ -458,11 +485,12 @@
                 return;
             }
 
-            if (!typing) {
-                if (!typingSent) {
-                    return;
-                }
+            const nextState = !!typing;
+            if (typingSent === nextState) {
+                return;
+            }
 
+            if (!typing) {
                 NChat.Visitor.sendTyping(conversationId, false);
                 typingSent = false;
                 return;
@@ -474,11 +502,22 @@
 
         function stopLocalTyping() {
             if (localTypingTimer) {
-                clearInterval(localTypingTimer);
+                clearTimeout(localTypingTimer);
                 localTypingTimer = null;
             }
 
             sendLocalTypingState(false);
+        }
+
+        function scheduleLocalTypingStop() {
+            if (localTypingTimer) {
+                clearTimeout(localTypingTimer);
+            }
+
+            localTypingTimer = setTimeout(() => {
+                localTypingTimer = null;
+                sendLocalTypingState(false);
+            }, TYPING_IDLE_MS);
         }
 
         function handleTypingInput() {
@@ -488,17 +527,7 @@
             }
 
             sendLocalTypingState(true);
-
-            if (!localTypingTimer) {
-                localTypingTimer = setInterval(() => {
-                    if (messageInput.value.trim().length === 0) {
-                        stopLocalTyping();
-                        return;
-                    }
-
-                    sendLocalTypingState(true);
-                }, TYPING_KEEPALIVE_MS);
-            }
+            scheduleLocalTypingStop();
         }
 
         function onTypingEvent(event) {
@@ -522,14 +551,31 @@
             renderedIds.add(msg.id);
 
             const isMine = msg.sender_type === 'visitor' && msg.sender_id === myInfo.id;
+            const isAssistant = NChat.isAssistantMessage(msg);
             const div = document.createElement('div');
             div.className = `msg ${isMine ? 'mine' : 'theirs'}`;
             div.dataset.id = msg.id;
             div.dataset.senderType = msg.sender_type;
-            div.innerHTML = `
-                <div class="msg__bubble">${escapeHtml(msg.body)}</div>
-                <span class="msg__time">${msg.time || ''}</span>
-            `;
+
+            const label = createMessageLabel(msg.sender_type);
+            if (label) {
+                div.appendChild(label);
+            }
+
+            const bubble = document.createElement('div');
+            bubble.className = `msg__bubble${isAssistant && !isMine ? ' msg__bubble--assistant' : ''}`;
+            if (isAssistant && !isMine) {
+                bubble.innerHTML = NChat.safeAssistantHtml(msg.body);
+            } else {
+                bubble.textContent = msg.body;
+            }
+
+            const time = document.createElement('span');
+            time.className = 'msg__time';
+            time.textContent = msg.time || '';
+
+            div.appendChild(bubble);
+            div.appendChild(time);
             syncMessageMeta(div, msg, isMine);
             chatCanvas.insertBefore(div, typingIndicator);
         }

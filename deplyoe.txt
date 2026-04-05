@@ -1,0 +1,76 @@
+Deployment Handoff
+
+Git Repo
+- Current origin: https://github.com/nirajk009/chatapp_ig_reborn_latest.git
+- Old source remote: https://github.com/nirajk009/chatapp_reborn
+- Main branch: main
+
+SSH Access
+- Host/IP: 162.241.123.162
+- User: golde5qk
+- Private key path: D:\testing\key\id_rsa
+- Key passphrase: M1PO+YEE6oqc
+- Primary SSH command:
+  ssh -i D:\testing\key\id_rsa golde5qk@162.241.123.162
+- If "Too many authentication failures":
+  ssh -o IdentitiesOnly=yes -i D:\testing\key\id_rsa golde5qk@162.241.123.162
+- Verified host response:
+  whoami => golde5qk
+  hostname => sh022.hostgator.in
+
+Hosting Paths
+- Home: /home4/golde5qk
+- Live app path: /home4/golde5qk/aplus-new.goldengatetechnolabs.com
+- Do not touch server .htaccess
+- Preserve hosting .env when deploying
+
+Hosting App Notes
+- Live app is deployed from local subtree:
+  laravel/example-app
+- Laravel web routes were adjusted so frontend files are served through Laravel without changing server .htaccess
+- Current frontend public URLs work from:
+  https://aplus-new.goldengatetechnolabs.com/
+  https://aplus-new.goldengatetechnolabs.com/visitor.html
+  https://aplus-new.goldengatetechnolabs.com/api.js
+
+Production Environment Notes
+- Hosting .env was intentionally left untouched
+- Last known hosting .env values observed:
+  APP_ENV=local
+  APP_DEBUG=true
+  APP_URL=http://localhost
+  DB_DATABASE=golde5qk_aplus_new
+
+Database Notes
+- Latest DB clear was done on hosting
+- Admin login row was preserved
+- Full backup created at:
+  /home4/golde5qk/db_backups/aplus_new_before_clear_20260405_103541.sql
+
+Surge Access
+- Surge email: kukarniraj9@gmail.com
+- Surge password: 1912004niraj
+- Also provided password value:
+  1912004niraj
+- Current Surge domain:
+  https://chatapp-reborn-20260404-1917.surge.sh/
+
+Surge Deployment Notes
+- Frontend files for Surge are in:
+  laravel/example-app/html
+- visitor.html was used as the root page for Surge deployment
+- api.js was adjusted so *.surge.sh uses backend origin:
+  https://aplus-new.goldengatetechnolabs.com
+- Surge CLI should be installed locally only, not globally
+
+Local-only Surge CLI Example
+- npm install --prefix "%TEMP%\codex-surge-cli" surge
+- CLI path:
+  %TEMP%\codex-surge-cli\node_modules\.bin\surge.cmd
+
+Important Rules
+- Do not install anything globally
+- Do not touch server .htaccess
+- Do not overwrite hosting .env
+- If deploying to hosting, sync laravel/example-app into the live app path
+- If deploying to Surge, publish laravel/example-app/html or a temp copy with visitor.html duplicated as index.html

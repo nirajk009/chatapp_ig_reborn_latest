@@ -185,6 +185,23 @@
             color: var(--on-primary); border-radius: 1.1rem; border-bottom-right-radius: 0.3rem;
             box-shadow: 0 2px 8px rgba(149,44,177,0.1);
         }
+        .bubble--assistant {
+            background: linear-gradient(135deg, #f8e6ff, #ffeef8);
+            color: var(--on-surface);
+            border: 1px solid rgba(149,44,177,0.14);
+            border-radius: 1.1rem;
+            border-bottom-left-radius: 0.3rem;
+        }
+        .bubble--assistant a {
+            color: var(--primary);
+            font-weight: 700;
+            text-decoration: underline;
+            text-underline-offset: 0.12em;
+        }
+        .msg-label {
+            font-size: 0.56rem; font-weight: 800; letter-spacing: 0.14em;
+            text-transform: uppercase; color: rgba(117,84,122,0.6);
+        }
         .timestamp { font-size: 0.575rem; font-weight: 500; color: rgba(117,84,122,0.5); }
 
         .typing-indicator {
@@ -311,7 +328,7 @@
             <div class="sidebar-header">
                 <div class="sidebar-header__left">
                     <span class="material-symbols-outlined" style="color:var(--primary); font-size:1.5rem;">bubble_chart</span>
-                    <span class="sidebar-header__title">Pulse</span>
+                    <span class="sidebar-header__title">n-chat</span>
                     <span class="sidebar-header__badge" id="totalBadge">0</span>
                 </div>
                 <div class="sidebar-header__actions">
@@ -491,7 +508,7 @@
         let remoteTypingTimer = null;
         let localTypingTimer = null;
         let typingSent = false;
-        const TYPING_KEEPALIVE_MS = 1200;
+        const TYPING_IDLE_MS = 1400;
         const TYPING_REMOTE_TIMEOUT_MS = 2600;
 
         function isVisitorOnline(visitorId, fallback = false) {
@@ -517,6 +534,18 @@
             }
 
             return `msg-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`.slice(0, 36);
+        }
+
+        function createMessageLabel(senderType) {
+            const labelText = NChat.senderBadge(senderType);
+            if (!labelText) {
+                return null;
+            }
+
+            const label = document.createElement('span');
+            label.className = 'msg-label';
+            label.textContent = labelText;
+            return label;
         }
 
         function createPendingMessage(clientId, body) {
@@ -829,9 +858,7 @@
 
                 const displayName = v.name || v.username || 'Visitor #' + visitorId;
                 const initials = displayName.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
-                const preview = c.last_message
-                    ? (c.last_message.sender_type === 'admin' ? 'You: ' : '') + c.last_message.body
-                    : 'No messages yet';
+                const preview = NChat.conversationPreview(c.last_message, 'admin');
                 const time = c.last_message
                     ? NChat.formatLocalTime(c.last_message.created_at, c.last_message.time || '')
                     : '';
@@ -916,11 +943,12 @@
                 return;
             }
 
-            if (!typing) {
-                if (!typingSent) {
-                    return;
-                }
+            const nextState = !!typing;
+            if (typingSent === nextState) {
+                return;
+            }
 
+            if (!typing) {
                 NChat.Admin.sendTyping(activeConversationId, false);
                 typingSent = false;
                 return;
@@ -932,11 +960,22 @@
 
         function stopLocalTyping() {
             if (localTypingTimer) {
-                clearInterval(localTypingTimer);
+                clearTimeout(localTypingTimer);
                 localTypingTimer = null;
             }
 
             sendLocalTypingState(false);
+        }
+
+        function scheduleLocalTypingStop() {
+            if (localTypingTimer) {
+                clearTimeout(localTypingTimer);
+            }
+
+            localTypingTimer = setTimeout(() => {
+                localTypingTimer = null;
+                sendLocalTypingState(false);
+            }, TYPING_IDLE_MS);
         }
 
         function handleTypingInput() {
@@ -950,17 +989,7 @@
             }
 
             sendLocalTypingState(true);
-
-            if (!localTypingTimer) {
-                localTypingTimer = setInterval(() => {
-                    if (chatInput.value.trim().length === 0) {
-                        stopLocalTyping();
-                        return;
-                    }
-
-                    sendLocalTypingState(true);
-                }, TYPING_KEEPALIVE_MS);
-            }
+            scheduleLocalTypingStop();
         }
 
         function onTypingEvent(event) {
@@ -1061,19 +1090,28 @@
             renderedMsgIds.add(msg.id);
 
             const isSent = msg.sender_type === 'admin';
+            const isAssistant = NChat.isAssistantMessage(msg);
             const group = document.createElement('div');
             group.className = `msg-group msg-group--${isSent ? 'sent' : 'received'}`;
             group.dataset.id = String(msg.id);
             group.dataset.senderType = msg.sender_type;
 
+            const label = createMessageLabel(msg.sender_type);
             const bubble = document.createElement('div');
-            bubble.className = `bubble bubble--${isSent ? 'sent' : 'received'}`;
-            bubble.textContent = msg.body;
+            bubble.className = `bubble bubble--${isSent ? 'sent' : (isAssistant ? 'assistant' : 'received')}`;
+            if (isAssistant) {
+                bubble.innerHTML = NChat.safeAssistantHtml(msg.body);
+            } else {
+                bubble.textContent = msg.body;
+            }
 
             const ts = document.createElement('span');
             ts.className = 'timestamp';
             ts.textContent = msg.time || '';
 
+            if (label) {
+                group.appendChild(label);
+            }
             group.appendChild(bubble);
             group.appendChild(ts);
             syncMessageMeta(group, msg, isSent);
