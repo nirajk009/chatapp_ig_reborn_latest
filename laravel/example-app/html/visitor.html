@@ -405,14 +405,7 @@
         const statusText = document.getElementById('statusText');
         const headerStatus = document.querySelector('.header-status');
         const typingIndicator = document.getElementById('typingIndicator');
-        const typingText = document.getElementById('typingText');
         let adminOnline = false;
-        let adminTyping = false;
-        let remoteTypingTimer = null;
-        let localTypingTimer = null;
-        let typingSent = false;
-        const TYPING_IDLE_MS = 1400;
-        const TYPING_REMOTE_TIMEOUT_MS = 2600;
 
         function hasAdminMember(snapshot) {
             return Array.isArray(snapshot && snapshot.members)
@@ -616,7 +609,6 @@
                 await Promise.all([
                     NChat.Visitor.subscribeToConversation(conversationId, {
                         onMessage: onRealtimeMessage,
-                        onTyping: onTypingEvent,
                         onRead: applyReadReceipt,
                     }),
                     NChat.Visitor.subscribeToAdminPresence(onAdminPresence),
@@ -674,109 +666,9 @@
         }
 
         function renderAdminPresence() {
-            const statusActive = adminOnline || adminTyping;
-            statusDot.classList.toggle('online', statusActive);
-            headerStatus.classList.toggle('online', statusActive);
-            statusText.textContent = adminTyping ? 'typing...' : (adminOnline ? 'online' : 'offline');
-        }
-
-        function showTypingIndicator(name) {
-            if (name) {
-                typingText.textContent = `${name} is typing...`;
-            }
-
-            adminTyping = true;
-            typingIndicator.classList.add('show');
-            renderAdminPresence();
-            scrollToBottom();
-        }
-
-        function hideTypingIndicator() {
-            adminTyping = false;
-            typingIndicator.classList.remove('show');
-            renderAdminPresence();
-        }
-
-        function clearRemoteTypingTimer() {
-            if (remoteTypingTimer) {
-                clearTimeout(remoteTypingTimer);
-                remoteTypingTimer = null;
-            }
-        }
-
-        function scheduleRemoteTypingClear() {
-            clearRemoteTypingTimer();
-            remoteTypingTimer = setTimeout(() => {
-                hideTypingIndicator();
-            }, TYPING_REMOTE_TIMEOUT_MS);
-        }
-
-        function sendLocalTypingState(typing) {
-            if (!conversationId) {
-                return;
-            }
-
-            const nextState = !!typing;
-            if (typingSent === nextState) {
-                return;
-            }
-
-            if (!typing) {
-                NChat.Visitor.sendTyping(conversationId, false);
-                typingSent = false;
-                return;
-            }
-
-            NChat.Visitor.sendTyping(conversationId, true);
-            typingSent = true;
-        }
-
-        function stopLocalTyping() {
-            if (localTypingTimer) {
-                clearTimeout(localTypingTimer);
-                localTypingTimer = null;
-            }
-
-            sendLocalTypingState(false);
-        }
-
-        function scheduleLocalTypingStop() {
-            if (localTypingTimer) {
-                clearTimeout(localTypingTimer);
-            }
-
-            localTypingTimer = setTimeout(() => {
-                localTypingTimer = null;
-                sendLocalTypingState(false);
-            }, TYPING_IDLE_MS);
-        }
-
-        function handleTypingInput() {
-            if (!conversationId) {
-                return;
-            }
-
-            if (messageInput.value.trim().length === 0) {
-                stopLocalTyping();
-                return;
-            }
-
-            sendLocalTypingState(true);
-            scheduleLocalTypingStop();
-        }
-
-        function onTypingEvent(event) {
-            if (!event || event.sender_role === 'visitor') {
-                return;
-            }
-
-            if (event.typing) {
-                showTypingIndicator(event.sender_name || 'Admin');
-                scheduleRemoteTypingClear();
-            } else {
-                clearRemoteTypingTimer();
-                hideTypingIndicator();
-            }
+            statusDot.classList.toggle('online', adminOnline);
+            headerStatus.classList.toggle('online', adminOnline);
+            statusText.textContent = adminOnline ? 'online' : 'offline';
         }
 
         function onRealtimeMessage(event) {
@@ -784,8 +676,6 @@
             if (!message) return;
 
             if (appendMessage(message, true)) {
-                clearRemoteTypingTimer();
-                hideTypingIndicator();
                 if (message.sender_type !== 'visitor' && conversationId) {
                     NChat.Visitor.markConversationRead(conversationId).catch(() => {});
                     messageCount++;
@@ -802,7 +692,6 @@
             isSending = true;
             messageInput.value = '';
             welcomeCard.style.display = 'none';
-            stopLocalTyping();
 
             const clientId = nextClientId();
             const pendingGroup = createPendingMessage(clientId, text);
@@ -837,8 +726,6 @@
                 sendMessage();
             }
         });
-        messageInput.addEventListener('input', handleTypingInput);
-        messageInput.addEventListener('blur', stopLocalTyping);
 
         // ── Append Message to DOM (returns true if actually added) ──
         function appendMessage(msg, animate) {
@@ -919,8 +806,6 @@
         // ── Boot ──
         adjustCanvasPadding();
         window.addEventListener('beforeunload', () => {
-            stopLocalTyping();
-            clearRemoteTypingTimer();
             NChat.Visitor.disconnectRealtime();
         });
         window.setInterval(refreshMessageMeta, 30000);

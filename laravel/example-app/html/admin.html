@@ -484,8 +484,6 @@
         const visitorProfileBtn = document.getElementById('visitorProfileBtn');
         const totalBadge = document.getElementById('totalBadge');
         const searchInput = document.getElementById('searchInput');
-        const typingIndicator = document.getElementById('typingIndicator');
-        const typingText = document.getElementById('typingText');
         const visitorProfileModal = document.getElementById('visitorProfileModal');
         const visitorProfileClose = document.getElementById('visitorProfileClose');
         const visitorProfileTitle = document.getElementById('visitorProfileTitle');
@@ -504,12 +502,6 @@
         const visitorProfileUserAgent = document.getElementById('visitorProfileUserAgent');
         const pendingMessages = new Map();
         let activeVisitorOnline = false;
-        let activeVisitorTyping = false;
-        let remoteTypingTimer = null;
-        let localTypingTimer = null;
-        let typingSent = false;
-        const TYPING_IDLE_MS = 1400;
-        const TYPING_REMOTE_TIMEOUT_MS = 2600;
 
         function isVisitorOnline(visitorId, fallback = false) {
             if (!visitorId) {
@@ -802,22 +794,81 @@
             adminPresenceReady = true;
             adminPresenceSnapshot = snapshot || { members: [] };
             conversations = applyPresenceToConversations(conversations);
+            sortConversationsInPlace();
             renderConversations();
 
             if (activeVisitorId) {
                 updateActiveVisitorStatus(isVisitorOnline(activeVisitorId));
-                if (!isVisitorOnline(activeVisitorId)) {
-                    clearRemoteTypingTimer();
-                    hideTypingIndicator();
-                }
             }
+        }
+
+        function conversationSortValue(conversation) {
+            const timestamp = conversation && (
+                conversation.updated_at
+                || (conversation.last_message && conversation.last_message.created_at)
+            );
+            const value = timestamp ? Date.parse(timestamp) : NaN;
+            return Number.isNaN(value) ? 0 : value;
+        }
+
+        function sortConversationsInPlace() {
+            conversations.sort((left, right) => conversationSortValue(right) - conversationSortValue(left));
+        }
+
+        function rememberConversation(conversation) {
+            if (conversation && conversation.conversation_id && conversation.visitor && conversation.visitor.id) {
+                NChat.Admin._conversationVisitorMap[conversation.conversation_id] = conversation.visitor.id;
+            }
+
+            return conversation;
+        }
+
+        function setConversations(items) {
+            conversations = applyPresenceToConversations((items || []).map(rememberConversation));
+            sortConversationsInPlace();
+        }
+
+        function updateConversationPreviewFromMessage(conversationId, message, options = {}) {
+            const index = conversations.findIndex(item => Number(item.conversation_id) === Number(conversationId));
+            if (index === -1) {
+                return false;
+            }
+
+            const current = conversations[index];
+            const createdAt = (message && message.created_at)
+                || (current.last_message && current.last_message.created_at)
+                || current.updated_at
+                || null;
+
+            const nextConversation = rememberConversation({
+                ...current,
+                unread_count: options.resetUnread
+                    ? 0
+                    : Math.max(0, Number(current.unread_count || 0) + Number(options.unreadDelta || 0)),
+                updated_at: createdAt || current.updated_at,
+                last_message: message ? {
+                    body: message.body || '',
+                    created_at: createdAt,
+                    time: NChat.formatLocalTime(createdAt, message.time || ''),
+                    sender_type: message.sender_type,
+                } : current.last_message,
+            });
+
+            conversations[index] = applyPresenceToConversations([nextConversation])[0];
+            sortConversationsInPlace();
+            renderConversations();
+            return true;
+        }
+
+        function resetConversationUnread(conversationId) {
+            return updateConversationPreviewFromMessage(conversationId, null, { resetUnread: true });
         }
 
         // ── Load Conversations ──
         async function loadConversations() {
             try {
                 const data = await NChat.Admin.getConversations();
-                conversations = applyPresenceToConversations(data.conversations);
+                setConversations(data.conversations);
                 renderConversations();
             } catch (err) {
                 if (err.status === 401) {
@@ -902,125 +953,46 @@
         }
 
         function renderActiveVisitorStatus() {
-            const statusActive = activeVisitorOnline || activeVisitorTyping;
-            chatStatus.textContent = activeVisitorTyping ? 'typing...' : (activeVisitorOnline ? 'online' : 'offline');
-            chatStatus.className = `chat-panel__status ${statusActive ? 'online' : ''}`;
+            chatStatus.textContent = activeVisitorOnline ? 'online' : 'offline';
+            chatStatus.className = `chat-panel__status ${activeVisitorOnline ? 'online' : ''}`;
         }
 
-        function showTypingIndicator(name) {
-            if (name) {
-                typingText.textContent = `${name} is typing...`;
-            }
+        function handleFeedMessage(event) {
+            const message = event && event.message ? event.message : null;
+            const conversation = event && event.conversation ? event.conversation : null;
 
-            activeVisitorTyping = true;
-            typingIndicator.classList.add('show');
-            renderActiveVisitorStatus();
-            scrollChatToBottom();
-        }
-
-        function hideTypingIndicator() {
-            activeVisitorTyping = false;
-            typingIndicator.classList.remove('show');
-            renderActiveVisitorStatus();
-        }
-
-        function clearRemoteTypingTimer() {
-            if (remoteTypingTimer) {
-                clearTimeout(remoteTypingTimer);
-                remoteTypingTimer = null;
-            }
-        }
-
-        function scheduleRemoteTypingClear() {
-            clearRemoteTypingTimer();
-            remoteTypingTimer = setTimeout(() => {
-                hideTypingIndicator();
-            }, TYPING_REMOTE_TIMEOUT_MS);
-        }
-
-        function sendLocalTypingState(typing) {
-            if (!activeConversationId) {
+            if (!message || !conversation) {
+                loadConversations();
                 return;
             }
 
-            const nextState = !!typing;
-            if (typingSent === nextState) {
-                return;
+            const isActiveConversation = Number(activeConversationId || 0) === Number(conversation.id);
+            const updated = updateConversationPreviewFromMessage(conversation.id, message, {
+                resetUnread: isActiveConversation,
+                unreadDelta: message.sender_type === 'visitor' && !isActiveConversation ? 1 : 0,
+            });
+
+            if (!updated) {
+                loadConversations();
             }
-
-            if (!typing) {
-                NChat.Admin.sendTyping(activeConversationId, false);
-                typingSent = false;
-                return;
-            }
-
-            NChat.Admin.sendTyping(activeConversationId, true);
-            typingSent = true;
-        }
-
-        function stopLocalTyping() {
-            if (localTypingTimer) {
-                clearTimeout(localTypingTimer);
-                localTypingTimer = null;
-            }
-
-            sendLocalTypingState(false);
-        }
-
-        function scheduleLocalTypingStop() {
-            if (localTypingTimer) {
-                clearTimeout(localTypingTimer);
-            }
-
-            localTypingTimer = setTimeout(() => {
-                localTypingTimer = null;
-                sendLocalTypingState(false);
-            }, TYPING_IDLE_MS);
-        }
-
-        function handleTypingInput() {
-            if (!activeConversationId) {
-                return;
-            }
-
-            if (chatInput.value.trim().length === 0) {
-                stopLocalTyping();
-                return;
-            }
-
-            sendLocalTypingState(true);
-            scheduleLocalTypingStop();
-        }
-
-        function onTypingEvent(event) {
-            if (!event || event.sender_role !== 'visitor') {
-                return;
-            }
-
-            if (event.typing) {
-                showTypingIndicator(event.sender_name || 'Visitor');
-                scheduleRemoteTypingClear();
-            } else {
-                clearRemoteTypingTimer();
-                hideTypingIndicator();
-            }
-        }
-
-        function handleFeedMessage() {
-            loadConversations();
         }
 
         function handleConversationMessage(event) {
             const message = event && event.message ? event.message : null;
             const conversation = event && event.conversation ? event.conversation : null;
 
+            if (message && conversation) {
+                updateConversationPreviewFromMessage(conversation.id, message, {
+                    resetUnread: Number(activeConversationId || 0) === Number(conversation.id),
+                    unreadDelta: 0,
+                });
+            }
+
             if (message && conversation && activeConversationId === conversation.id) {
                 if (appendChatMessage(message)) {
-                    clearRemoteTypingTimer();
-                    hideTypingIndicator();
                     if (message.sender_type === 'visitor' && activeVisitorId) {
+                        resetConversationUnread(conversation.id);
                         NChat.Admin.markConversationRead(activeVisitorId)
-                            .then(() => loadConversations())
                             .catch(() => {});
                     }
                     scrollChatToBottom();
@@ -1035,9 +1007,6 @@
             activeConversationId = null;
             renderedMsgIds.clear();
             pendingMessages.clear();
-            clearRemoteTypingTimer();
-            hideTypingIndicator();
-            stopLocalTyping();
             closeVisitorProfile();
             visitorProfileBtn.disabled = true;
             NChat.Admin.unsubscribeConversation();
@@ -1058,6 +1027,7 @@
                 activeVisitor = visitor;
                 activeConversationId = data.conversation_id;
                 visitorProfileBtn.disabled = false;
+                resetConversationUnread(activeConversationId);
 
                 chatName.textContent = visitor.name || 'Visitor #' + visitor.id;
                 chatAvatar.textContent = (visitor.name || 'V').charAt(0).toUpperCase();
@@ -1073,7 +1043,6 @@
                 scrollChatToBottom();
                 await NChat.Admin.subscribeToConversation(activeConversationId, {
                     onMessage: handleConversationMessage,
-                    onTyping: onTypingEvent,
                     onRead: applyReadReceipt,
                 });
 
@@ -1137,7 +1106,6 @@
 
             isSending = true;
             chatInput.value = '';
-            stopLocalTyping();
 
             const clientId = nextClientId();
             const pendingGroup = createPendingMessage(clientId, text);
@@ -1150,8 +1118,12 @@
                         ...result.message,
                         client_id: result.message.client_id || result.client_id,
                     });
+                    updateConversationPreviewFromMessage(
+                        result.message.conversation_id || activeConversationId,
+                        result.message,
+                        { resetUnread: true }
+                    );
                 }
-                loadConversations();
             } catch (err) {
                 pendingMessages.delete(clientId);
                 const ts = pendingGroup.querySelector('.timestamp');
@@ -1168,8 +1140,6 @@
         chatInput.addEventListener('keydown', e => {
             if (e.key === 'Enter') { e.preventDefault(); adminSend(); }
         });
-        chatInput.addEventListener('input', handleTypingInput);
-        chatInput.addEventListener('blur', stopLocalTyping);
         visitorProfileBtn.addEventListener('click', openVisitorProfile);
         visitorProfileClose.addEventListener('click', closeVisitorProfile);
         visitorProfileModal.addEventListener('click', event => {
@@ -1190,9 +1160,6 @@
             activeVisitor = null;
             activeConversationId = null;
             pendingMessages.clear();
-            stopLocalTyping();
-            clearRemoteTypingTimer();
-            hideTypingIndicator();
             closeVisitorProfile();
             visitorProfileBtn.disabled = true;
             NChat.Admin.unsubscribeConversation();
@@ -1221,8 +1188,6 @@
         });
         window.addEventListener('beforeunload', () => {
             closeVisitorProfile();
-            stopLocalTyping();
-            clearRemoteTypingTimer();
             NChat.Admin.disconnectRealtime();
         });
 

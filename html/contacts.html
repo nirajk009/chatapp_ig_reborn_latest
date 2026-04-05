@@ -302,6 +302,65 @@
             });
         }
 
+        function contactSortValue(contact) {
+            const timestamp = contact && contact.last_message && contact.last_message.created_at;
+            const value = timestamp ? Date.parse(timestamp) : NaN;
+            return Number.isNaN(value) ? 0 : value;
+        }
+
+        function sortContactsInPlace() {
+            contacts.sort((left, right) => contactSortValue(right) - contactSortValue(left));
+        }
+
+        function isIncomingForCurrentVisitor(message) {
+            const me = NChat.Visitor.getInfo();
+            if (!message) {
+                return false;
+            }
+
+            if (message.sender_type === 'assistant' || message.sender_type === 'admin') {
+                return true;
+            }
+
+            return Number(message.sender_id || 0) !== Number(me && me.id);
+        }
+
+        function patchContactFromEvent(event) {
+            const message = event && event.message ? event.message : event;
+            if (!message || !message.conversation_id) {
+                loadContacts();
+                return;
+            }
+
+            const index = contacts.findIndex(contact => Number(contact.conversation_id) === Number(message.conversation_id));
+            if (index === -1) {
+                loadContacts();
+                return;
+            }
+
+            const current = contacts[index];
+            const createdAt = message.created_at
+                || (current.last_message && current.last_message.created_at)
+                || null;
+
+            const nextContact = {
+                ...current,
+                last_message: {
+                    body: message.body || '',
+                    created_at: createdAt,
+                    time: NChat.formatLocalTime(createdAt, message.time || ''),
+                    sender_type: message.sender_type,
+                },
+                unread_count: isIncomingForCurrentVisitor(message)
+                    ? Number(current.unread_count || 0) + 1
+                    : 0,
+            };
+
+            contacts[index] = applyLivePresence([nextContact])[0];
+            sortContactsInPlace();
+            renderContacts(contacts);
+        }
+
         function syncContactSubscriptions() {
             const desiredSlots = new Set();
 
@@ -319,10 +378,11 @@
 
                 contactConversationSlots.add(slot);
                 NChat.Visitor.subscribeToConversation(contact.conversation_id, {
-                    onMessage: () => loadContacts(),
+                    onMessage: patchContactFromEvent,
                     onPresenceChange: snapshot => {
                         conversationPresenceSnapshots[contact.conversation_id] = snapshot;
                         contacts = applyLivePresence(contacts);
+                        sortContactsInPlace();
                         renderContacts(contacts);
                     },
                 }, slot).catch(err => {
@@ -353,6 +413,7 @@
                 adminPresenceReady = true;
                 adminPresenceSnapshot = snapshot;
                 contacts = applyLivePresence(contacts);
+                sortContactsInPlace();
                 renderContacts(contacts);
             }, 'visitorContactsAdminPresence').catch(err => {
                 console.error('Admin presence error:', err);
@@ -366,6 +427,7 @@
             try {
                 const data = await NChat.Visitor.getContacts();
                 contacts = applyLivePresence(data.contacts || []);
+                sortContactsInPlace();
                 renderContacts(contacts);
                 syncContactSubscriptions();
             } catch (err) {

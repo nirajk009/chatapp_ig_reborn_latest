@@ -170,6 +170,24 @@ const NChat = (() => {
             return this.waitForSocketId(client);
         },
 
+        peekSocketId(role) {
+            const client = this._clients[role];
+            if (!client || !client.connection) {
+                return null;
+            }
+
+            return client.connection.socket_id || null;
+        },
+
+        async prime(role) {
+            const client = role === 'admin'
+                ? await this.adminClient()
+                : await this.visitorClient();
+
+            this.waitForSocketId(client).catch(() => null);
+            return client;
+        },
+
         presenceSnapshot(channel) {
             const rawMembers = channel && channel.members && channel.members.members
                 ? channel.members.members
@@ -254,6 +272,8 @@ const NChat = (() => {
                 name: channelName,
                 channel,
             };
+
+            this.waitForSocketId(client).catch(() => null);
 
             return channel;
         },
@@ -563,6 +583,7 @@ const NChat = (() => {
             if (data.visitor && data.visitor.token) {
                 this.setToken(data.visitor.token);
                 this.setInfo(data.visitor);
+                Realtime.prime('visitor').catch(() => null);
             }
             return data;
         },
@@ -578,6 +599,7 @@ const NChat = (() => {
             if (data.visitor && data.visitor.token) {
                 this.setToken(data.visitor.token);
                 this.setInfo(data.visitor);
+                Realtime.prime('visitor').catch(() => null);
             }
 
             return data;
@@ -591,9 +613,11 @@ const NChat = (() => {
                 if (data.admin) {
                     AdminAPI.setInfo(data.admin);
                 }
+                Realtime.prime('admin').catch(() => null);
             } else if (data.visitor && data.visitor.token) {
                 this.setToken(data.visitor.token);
                 this.setInfo(data.visitor);
+                Realtime.prime('visitor').catch(() => null);
             }
 
             return data;
@@ -619,9 +643,11 @@ const NChat = (() => {
                 payload.conversation_id = conversationId;
             }
 
-            const socketId = await Realtime.getSocketId('visitor').catch(() => null);
+            const socketId = Realtime.peekSocketId('visitor');
             if (socketId) {
                 payload.socket_id = socketId;
+            } else {
+                Realtime.prime('visitor').catch(() => null);
             }
 
             const data = await request('POST', '/visitor/messages', payload, this.headers());
@@ -805,6 +831,7 @@ const NChat = (() => {
             const data = await request('POST', '/admin/login', { email, password });
             if (data.token) {
                 this.setToken(data.token);
+                Realtime.prime('admin').catch(() => null);
             }
             if (data.admin) {
                 this.setInfo(data.admin);
@@ -854,9 +881,11 @@ const NChat = (() => {
                 client_id: actualClientId,
             };
 
-            const socketId = await Realtime.getSocketId('admin').catch(() => null);
+            const socketId = Realtime.peekSocketId('admin');
             if (socketId) {
                 payload.socket_id = socketId;
+            } else {
+                Realtime.prime('admin').catch(() => null);
             }
 
             const data = await request(

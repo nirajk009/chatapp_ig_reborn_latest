@@ -110,17 +110,24 @@ class VisitorChatController extends Controller
         );
     }
 
-    private function updateVisitorContext(Visitor $visitor, Request $request): bool
+    private function updateVisitorContext(Visitor $visitor, Request $request, bool $force = false): bool
     {
         $ipAddress = $request->ip();
         $userAgent = $request->userAgent();
+        $now = now();
         $contextChanged = $visitor->ip_address !== $ipAddress
             || $visitor->user_agent !== $userAgent;
+        $shouldRefreshLastSeen = !$visitor->last_seen_at
+            || $visitor->last_seen_at->lte($now->copy()->subSeconds(20));
+
+        if (!$force && !$contextChanged && !$shouldRefreshLastSeen) {
+            return false;
+        }
 
         $visitor->forceFill([
             'ip_address' => $ipAddress,
             'user_agent' => $userAgent,
-            'last_seen_at' => now(),
+            'last_seen_at' => $now,
         ])->save();
 
         return $contextChanged;
@@ -137,7 +144,7 @@ class VisitorChatController extends Controller
 
     private function syncVisitorContext(Visitor $visitor, Request $request, ?string $eventType = null): void
     {
-        $contextChanged = $this->updateVisitorContext($visitor, $request);
+        $contextChanged = $this->updateVisitorContext($visitor, $request, $eventType !== null);
 
         if ($eventType) {
             $this->recordVisitorAccess($visitor, $request, $eventType);

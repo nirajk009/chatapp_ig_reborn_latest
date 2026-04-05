@@ -204,19 +204,12 @@
         const messageInput = document.getElementById('messageInput');
         const sendBtn = document.getElementById('sendBtn');
         const typingIndicator = document.getElementById('typingIndicator');
-        const typingText = document.getElementById('typingText');
         const renderedIds = new Set();
         const pendingMessages = new Map();
         let myInfo = NChat.Visitor.getInfo();
         let otherInfo = null;
         let isSending = false;
         let remoteOnline = false;
-        let remoteTyping = false;
-        let remoteTypingTimer = null;
-        let localTypingTimer = null;
-        let typingSent = false;
-        const TYPING_IDLE_MS = 1400;
-        const TYPING_REMOTE_TIMEOUT_MS = 2600;
 
         function hasMember(snapshot, memberId) {
             return Array.isArray(snapshot && snapshot.members)
@@ -397,7 +390,6 @@
                     await Promise.all([
                         NChat.Visitor.subscribeToConversation(conversationId, {
                             onMessage: onRealtimeMessage,
-                            onTyping: onTypingEvent,
                             onRead: applyReadReceipt,
                         }),
                         NChat.Visitor.subscribeToAdminPresence(onAdminPresence, 'visitorChatAdminPresence'),
@@ -405,7 +397,6 @@
                 } else {
                     await NChat.Visitor.subscribeToConversation(conversationId, {
                         onMessage: onRealtimeMessage,
-                        onTyping: onTypingEvent,
                         onRead: applyReadReceipt,
                         onPresenceChange: onConversationPresence,
                     });
@@ -421,9 +412,8 @@
             const dot = document.getElementById('statusDot');
             const text = document.getElementById('statusText');
             const status = document.getElementById('chatStatus');
-            const statusActive = remoteOnline || remoteTyping;
 
-            if (statusActive) {
+            if (remoteOnline) {
                 dot.classList.add('online');
                 status.classList.add('online');
             } else {
@@ -431,7 +421,7 @@
                 status.classList.remove('online');
             }
 
-            text.textContent = remoteTyping ? 'typing...' : (remoteOnline ? 'online' : 'offline');
+            text.textContent = remoteOnline ? 'online' : 'offline';
         }
 
         function onConversationPresence(snapshot) {
@@ -447,101 +437,6 @@
                 Array.isArray(snapshot && snapshot.members)
                     && snapshot.members.some(member => String(member.id).startsWith('admin-'))
             );
-        }
-
-        function showTypingIndicator(name) {
-            if (name) {
-                typingText.textContent = `${name} is typing...`;
-            }
-
-            remoteTyping = true;
-            typingIndicator.classList.add('show');
-            updateOnlineStatus(remoteOnline);
-            scrollToBottom();
-        }
-
-        function hideTypingIndicator() {
-            remoteTyping = false;
-            typingIndicator.classList.remove('show');
-            updateOnlineStatus(remoteOnline);
-        }
-
-        function clearRemoteTypingTimer() {
-            if (remoteTypingTimer) {
-                clearTimeout(remoteTypingTimer);
-                remoteTypingTimer = null;
-            }
-        }
-
-        function scheduleRemoteTypingClear() {
-            clearRemoteTypingTimer();
-            remoteTypingTimer = setTimeout(() => {
-                hideTypingIndicator();
-            }, TYPING_REMOTE_TIMEOUT_MS);
-        }
-
-        function sendLocalTypingState(typing) {
-            if (!conversationId) {
-                return;
-            }
-
-            const nextState = !!typing;
-            if (typingSent === nextState) {
-                return;
-            }
-
-            if (!typing) {
-                NChat.Visitor.sendTyping(conversationId, false);
-                typingSent = false;
-                return;
-            }
-
-            NChat.Visitor.sendTyping(conversationId, true);
-            typingSent = true;
-        }
-
-        function stopLocalTyping() {
-            if (localTypingTimer) {
-                clearTimeout(localTypingTimer);
-                localTypingTimer = null;
-            }
-
-            sendLocalTypingState(false);
-        }
-
-        function scheduleLocalTypingStop() {
-            if (localTypingTimer) {
-                clearTimeout(localTypingTimer);
-            }
-
-            localTypingTimer = setTimeout(() => {
-                localTypingTimer = null;
-                sendLocalTypingState(false);
-            }, TYPING_IDLE_MS);
-        }
-
-        function handleTypingInput() {
-            if (messageInput.value.trim().length === 0) {
-                stopLocalTyping();
-                return;
-            }
-
-            sendLocalTypingState(true);
-            scheduleLocalTypingStop();
-        }
-
-        function onTypingEvent(event) {
-            if (!event || event.sender_role !== (otherInfo && otherInfo.type === 'admin' ? 'admin' : 'visitor')) {
-                return;
-            }
-
-            if (event.typing) {
-                showTypingIndicator(event.sender_name || (otherInfo && (otherInfo.name || otherInfo.username)) || 'User');
-                scheduleRemoteTypingClear();
-            } else {
-                clearRemoteTypingTimer();
-                hideTypingIndicator();
-            }
         }
 
         function appendMessage(msg) {
@@ -585,8 +480,6 @@
             if (!message) return;
 
             appendMessage(message);
-            clearRemoteTypingTimer();
-            hideTypingIndicator();
             const isMine = message.sender_type === 'visitor' && message.sender_id === myInfo.id;
             if (!isMine) {
                 NChat.Visitor.markConversationRead(conversationId).catch(() => {});
@@ -611,7 +504,6 @@
             isSending = true;
 
             messageInput.value = '';
-            stopLocalTyping();
 
             const clientId = nextClientId();
             const tempDiv = createPendingMessage(clientId, body);
@@ -638,12 +530,8 @@
         messageInput.addEventListener('keypress', e => {
             if (e.key === 'Enter') sendMessage();
         });
-        messageInput.addEventListener('input', handleTypingInput);
-        messageInput.addEventListener('blur', stopLocalTyping);
 
         window.addEventListener('beforeunload', () => {
-            stopLocalTyping();
-            clearRemoteTypingTimer();
             NChat.Visitor.disconnectRealtime();
         });
         window.setInterval(refreshMessageMeta, 30000);
