@@ -67,6 +67,17 @@ class RealtimeService
         );
     }
 
+    public function publishReadReceipt(Conversation $conversation, array $payload, ?string $socketId = null): void
+    {
+        $this->trigger(
+            $conversation,
+            [RealtimeChannels::conversation($conversation)],
+            'message.read',
+            $payload,
+            $socketId
+        );
+    }
+
     private function client(): ?Pusher
     {
         if (!$this->enabled()) {

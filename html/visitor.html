@@ -410,6 +410,7 @@
             group.className = 'msg-group msg-group--sent';
             group.dataset.clientId = clientId;
             group.dataset.pending = 'true';
+            group.dataset.senderType = 'visitor';
 
             const bubble = document.createElement('div');
             bubble.className = 'bubble bubble--sent';
@@ -424,6 +425,71 @@
             chatCanvas.insertBefore(group, typingIndicator);
             pendingMessages.set(clientId, group);
             return group;
+        }
+
+        function messageMetaText(msg, isMine) {
+            if (!msg) {
+                return '';
+            }
+
+            if (!isMine) {
+                return msg.time || '';
+            }
+
+            return msg.read_status
+                || NChat.formatStatusTime(
+                    (msg.is_read ? (msg.read_at || msg.created_at) : msg.created_at),
+                    msg.is_read ? 'Seen' : 'Sent',
+                    msg.is_read ? 'Seen' : 'Sent'
+                );
+        }
+
+        function renderStoredMessageMeta(group) {
+            if (!group) {
+                return;
+            }
+
+            const ts = group.querySelector('.timestamp');
+            const createdAt = group.dataset.createdAt || '';
+            if (!ts || !createdAt) {
+                return;
+            }
+
+            if (group.classList.contains('msg-group--sent')) {
+                const isRead = group.dataset.isRead === 'true';
+                ts.textContent = NChat.formatStatusTime(
+                    isRead ? (group.dataset.readAt || createdAt) : createdAt,
+                    isRead ? 'Seen' : 'Sent',
+                    isRead ? 'Seen' : 'Sent'
+                );
+                return;
+            }
+
+            ts.textContent = NChat.formatLocalTime(createdAt, ts.textContent || '');
+        }
+
+        function syncMessageMeta(group, msg, isMine) {
+            if (!group || !msg) {
+                return;
+            }
+
+            group.dataset.createdAt = msg.created_at || '';
+            group.dataset.readAt = msg.read_at || '';
+            group.dataset.isRead = msg.is_read ? 'true' : 'false';
+
+            if (isMine) {
+                renderStoredMessageMeta(group);
+                return;
+            }
+
+            const ts = group.querySelector('.timestamp');
+            if (ts) {
+                ts.textContent = messageMetaText(msg, false);
+            }
+        }
+
+        function refreshMessageMeta() {
+            chatCanvas.querySelectorAll('.msg-group[data-id]').forEach(renderStoredMessageMeta);
         }
 
         function resolvePendingMessage(msg) {
@@ -441,18 +507,39 @@
 
             group.dataset.id = String(msg.id);
             delete group.dataset.pending;
+            group.dataset.senderType = msg.sender_type || 'visitor';
 
             if (bubble) {
                 bubble.textContent = msg.body;
             }
 
-            if (ts) {
-                ts.textContent = msg.time || '';
-            }
+            syncMessageMeta(group, msg, true);
 
             renderedIds.add(msg.id);
             pendingMessages.delete(msg.client_id);
             return true;
+        }
+
+        function applyReadReceipt(event) {
+            if (!event || Number(event.reader_id || 0) === Number(visitorInfo && visitorInfo.id)) {
+                return;
+            }
+
+            const lastReadMessageId = Number(event.last_read_message_id || 0);
+            if (!Number.isFinite(lastReadMessageId) || lastReadMessageId <= 0) {
+                return;
+            }
+
+            chatCanvas.querySelectorAll('.msg-group--sent[data-id]').forEach(group => {
+                const messageId = Number(group.dataset.id || 0);
+                if (!Number.isFinite(messageId) || messageId > lastReadMessageId) {
+                    return;
+                }
+
+                group.dataset.isRead = 'true';
+                group.dataset.readAt = event.read_at || '';
+                renderStoredMessageMeta(group);
+            });
         }
 
         // ── Init ──
@@ -484,6 +571,7 @@
                     addDayDivider('Today');
                     msgData.messages.forEach(m => appendMessage(m, false));
                     messageCount = msgData.messages.length;
+                    refreshMessageMeta();
                 }
 
                 scrollToBottom();
@@ -495,6 +583,7 @@
                     NChat.Visitor.subscribeToConversation(conversationId, {
                         onMessage: onRealtimeMessage,
                         onTyping: onTypingEvent,
+                        onRead: applyReadReceipt,
                     }),
                     NChat.Visitor.subscribeToAdminPresence(onAdminPresence),
                 ]);
@@ -725,6 +814,8 @@
 
             const group = document.createElement('div');
             group.className = `msg-group msg-group--${msg.sender_type === 'visitor' ? 'sent' : 'received'}`;
+            group.dataset.id = String(msg.id);
+            group.dataset.senderType = msg.sender_type;
             if (!animate) group.style.animation = 'none';
 
             const bubble = document.createElement('div');
@@ -733,10 +824,11 @@
 
             const ts = document.createElement('span');
             ts.className = 'timestamp';
-            ts.textContent = msg.time;
+            ts.textContent = msg.time || '';
 
             group.appendChild(bubble);
             group.appendChild(ts);
+            syncMessageMeta(group, msg, msg.sender_type === 'visitor');
             chatCanvas.insertBefore(group, typingIndicator);
             return true;
         }
@@ -803,6 +895,7 @@
             clearRemoteTypingTimer();
             NChat.Visitor.disconnectRealtime();
         });
+        window.setInterval(refreshMessageMeta, 30000);
         init();
     </script>
 </body>

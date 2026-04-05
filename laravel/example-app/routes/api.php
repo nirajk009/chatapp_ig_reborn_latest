@@ -29,6 +29,7 @@ Route::prefix('visitor')->group(function () {
 Route::prefix('admin')->group(function () {
     Route::post('/login', [AdminController::class, 'login']);
     Route::get('/conversations', [AdminController::class, 'conversations']);
+    Route::get('/visitors/{visitorId}/profile', [AdminController::class, 'visitorProfile']);
     Route::get('/conversations/{visitorId}/messages', [AdminController::class, 'getMessages']);
     Route::post('/conversations/{visitorId}/messages', [AdminController::class, 'sendMessage']);
     Route::post('/conversations/{visitorId}/typing', [AdminController::class, 'typing']);

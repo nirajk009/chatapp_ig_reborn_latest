@@ -33,6 +33,7 @@ class AdminController extends Controller
             'sender_type' => $msg->sender_type,
             'body' => $msg->body,
             'is_read' => $msg->is_read,
+            'read_at' => $msg->read_at?->toIso8601String(),
             'created_at' => $msg->created_at?->toIso8601String(),
             'time' => $msg->created_at->format('g:i A'),
         ];
@@ -60,12 +61,71 @@ class AdminController extends Controller
         ];
     }
 
-    private function markConversationReadForAdmin(Conversation $conversation): void
+    private function readReceiptPayload(
+        Conversation $conversation,
+        string $readerRole,
+        int $readerId,
+        int $lastReadMessageId,
+        string $readAt
+    ): array
     {
-        $conversation->messages()
+        return [
+            'conversation_id' => $conversation->id,
+            'reader_role' => $readerRole,
+            'reader_id' => $readerId,
+            'last_read_message_id' => $lastReadMessageId,
+            'read_at' => $readAt,
+        ];
+    }
+
+    private function markConversationReadForAdmin(Conversation $conversation, Admin $admin): ?array
+    {
+        $readQuery = $conversation->messages()
             ->where('sender_type', 'visitor')
             ->where('is_read', false)
-            ->update(['is_read' => true]);
+            ;
+
+        $lastReadMessage = (clone $readQuery)->orderByDesc('id')->first();
+        if (!$lastReadMessage) {
+            return null;
+        }
+
+        $readAt = now();
+        $readQuery->update([
+            'is_read' => true,
+            'read_at' => $readAt,
+        ]);
+
+        return $this->readReceiptPayload(
+            $conversation,
+            'admin',
+            $admin->id,
+            $lastReadMessage->id,
+            $readAt->toIso8601String()
+        );
+    }
+
+    private function visitorPayload(Visitor $visitor): array
+    {
+        $visitor->loadMissing('latestAccessLog');
+        $latestAccess = $visitor->latestAccessLog;
+
+        return [
+            'id' => $visitor->id,
+            'name' => $visitor->name ?? $visitor->username ?? 'Visitor #' . $visitor->id,
+            'username' => $visitor->username,
+            'email' => $visitor->email,
+            'is_online' => $visitor->isOnline(),
+            'last_seen_at' => $visitor->last_seen_at?->toIso8601String(),
+            'created_at' => $visitor->created_at?->toIso8601String(),
+            'latest_access' => [
+                'ip_address' => $latestAccess?->ip_address ?? $visitor->ip_address,
+                'user_agent' => $latestAccess?->user_agent ?? $visitor->user_agent,
+                'event_type' => $latestAccess?->event_type,
+                'logged_at' => $latestAccess?->created_at?->toIso8601String(),
+            ],
+            'access_log_count' => $visitor->accessLogs()->count(),
+        ];
     }
 
     // ─── Login ───
@@ -143,7 +203,7 @@ class AdminController extends Controller
 
     // ─── Get Messages for a conversation ───
 
-    public function getMessages(Request $request, int $visitorId): JsonResponse
+    public function getMessages(Request $request, int $visitorId, RealtimeService $realtime): JsonResponse
     {
         $admin = $this->resolveAdmin($request);
         if (!$admin) return response()->json(['error' => 'Unauthorized'], 401);
@@ -154,24 +214,35 @@ class AdminController extends Controller
         $conv = Conversation::findOrCreateVisitorAdmin($visitor->id, $admin->id);
 
         // Mark visitor messages as read
-        $this->markConversationReadForAdmin($conv);
+        $readReceipt = $this->markConversationReadForAdmin($conv, $admin);
+        if ($readReceipt) {
+            $realtime->publishReadReceipt($conv, $readReceipt);
+        }
 
         $messages = $conv->messages()->get()->map(fn($m) => $this->formatMessage($m));
 
         return response()->json([
             'messages' => $messages,
             'conversation_id' => $conv->id,
-            'visitor' => [
-                'id' => $visitor->id,
-                'name' => $visitor->name ?? $visitor->username ?? 'Visitor #' . $visitor->id,
-                'username' => $visitor->username,
-                'email' => $visitor->email,
-                'is_online' => $visitor->isOnline(),
-            ],
+            'visitor' => $this->visitorPayload($visitor),
         ]);
     }
 
     // ─── Send Message ───
+
+    public function visitorProfile(Request $request, int $visitorId): JsonResponse
+    {
+        $admin = $this->resolveAdmin($request);
+        if (!$admin) return response()->json(['error' => 'Unauthorized'], 401);
+
+        cache(['admin_last_poll' => now()], now()->addMinutes(1));
+
+        $visitor = Visitor::findOrFail($visitorId);
+
+        return response()->json([
+            'visitor' => $this->visitorPayload($visitor),
+        ]);
+    }
 
     public function sendMessage(Request $request, int $visitorId, RealtimeService $realtime): JsonResponse
     {
@@ -294,14 +365,17 @@ class AdminController extends Controller
 
     // ─── Poll (global — for conversation list) ───
 
-    public function markConversationRead(Request $request, int $visitorId): JsonResponse
+    public function markConversationRead(Request $request, int $visitorId, RealtimeService $realtime): JsonResponse
     {
         $admin = $this->resolveAdmin($request);
         if (!$admin) return response()->json(['error' => 'Unauthorized'], 401);
 
         $visitor = Visitor::findOrFail($visitorId);
         $conversation = Conversation::findOrCreateVisitorAdmin($visitor->id, $admin->id);
-        $this->markConversationReadForAdmin($conversation);
+        $readReceipt = $this->markConversationReadForAdmin($conversation, $admin);
+        if ($readReceipt) {
+            $realtime->publishReadReceipt($conversation, $readReceipt);
+        }
 
         return response()->json(['status' => 'ok']);
     }
@@ -333,7 +407,7 @@ class AdminController extends Controller
 
     // ─── Poll specific conversation ───
 
-    public function pollConversation(Request $request, int $visitorId): JsonResponse
+    public function pollConversation(Request $request, int $visitorId, RealtimeService $realtime): JsonResponse
     {
         $admin = $this->resolveAdmin($request);
         if (!$admin) return response()->json(['error' => 'Unauthorized'], 401);
@@ -346,7 +420,10 @@ class AdminController extends Controller
         $conv = Conversation::findOrCreateVisitorAdmin($visitor->id, $admin->id);
 
         // Mark visitor messages as read
-        $this->markConversationReadForAdmin($conv);
+        $readReceipt = $this->markConversationReadForAdmin($conv, $admin);
+        if ($readReceipt) {
+            $realtime->publishReadReceipt($conv, $readReceipt);
+        }
 
         $messages = $conv->messages()
             ->where('id', '>', $sinceId)

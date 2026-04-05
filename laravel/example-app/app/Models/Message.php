@@ -12,6 +12,7 @@ class Message extends Model
         'sender_type',
         'body',
         'is_read',
+        'read_at',
         'client_id',
     ];
 
@@ -19,6 +20,7 @@ class Message extends Model
     {
         return [
             'is_read' => 'boolean',
+            'read_at' => 'datetime',
         ];
     }
 

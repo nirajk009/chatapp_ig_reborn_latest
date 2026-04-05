@@ -35,6 +35,7 @@ class VisitorChatController extends Controller
             'sender_type' => $msg->sender_type,
             'body' => $msg->body,
             'is_read' => $msg->is_read,
+            'read_at' => $msg->read_at?->toIso8601String(),
             'created_at' => $msg->created_at?->toIso8601String(),
             'time' => $msg->created_at->format('g:i A'),
         ];
@@ -62,15 +63,89 @@ class VisitorChatController extends Controller
         ];
     }
 
-    private function markConversationReadForVisitor(Conversation $conversation, Visitor $visitor): void
+    private function readReceiptPayload(
+        Conversation $conversation,
+        string $readerRole,
+        int $readerId,
+        int $lastReadMessageId,
+        string $readAt
+    ): array
     {
-        $conversation->messages()
+        return [
+            'conversation_id' => $conversation->id,
+            'reader_role' => $readerRole,
+            'reader_id' => $readerId,
+            'last_read_message_id' => $lastReadMessageId,
+            'read_at' => $readAt,
+        ];
+    }
+
+    private function markConversationReadForVisitor(Conversation $conversation, Visitor $visitor): ?array
+    {
+        $readQuery = $conversation->messages()
             ->where('is_read', false)
             ->where(function ($query) use ($visitor) {
                 $query->where('sender_type', '!=', 'visitor')
                     ->orWhere('sender_id', '!=', $visitor->id);
-            })
-            ->update(['is_read' => true]);
+            });
+
+        $lastReadMessage = (clone $readQuery)->orderByDesc('id')->first();
+        if (!$lastReadMessage) {
+            return null;
+        }
+
+        $readAt = now();
+        $readQuery->update([
+            'is_read' => true,
+            'read_at' => $readAt,
+        ]);
+
+        return $this->readReceiptPayload(
+            $conversation,
+            'visitor',
+            $visitor->id,
+            $lastReadMessage->id,
+            $readAt->toIso8601String()
+        );
+    }
+
+    private function updateVisitorContext(Visitor $visitor, Request $request): bool
+    {
+        $ipAddress = $request->ip();
+        $userAgent = $request->userAgent();
+        $contextChanged = $visitor->ip_address !== $ipAddress
+            || $visitor->user_agent !== $userAgent;
+
+        $visitor->forceFill([
+            'ip_address' => $ipAddress,
+            'user_agent' => $userAgent,
+            'last_seen_at' => now(),
+        ])->save();
+
+        return $contextChanged;
+    }
+
+    private function recordVisitorAccess(Visitor $visitor, Request $request, string $eventType): void
+    {
+        $visitor->accessLogs()->create([
+            'event_type' => $eventType,
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+        ]);
+    }
+
+    private function syncVisitorContext(Visitor $visitor, Request $request, ?string $eventType = null): void
+    {
+        $contextChanged = $this->updateVisitorContext($visitor, $request);
+
+        if ($eventType) {
+            $this->recordVisitorAccess($visitor, $request, $eventType);
+            return;
+        }
+
+        if ($contextChanged) {
+            $this->recordVisitorAccess($visitor, $request, 'context_refresh');
+        }
     }
 
     // ─── Init (anonymous session) ───
@@ -86,9 +161,9 @@ class VisitorChatController extends Controller
                 'user_agent' => $request->userAgent(),
                 'last_seen_at' => now(),
             ]);
-        } else {
-            $visitor->update(['last_seen_at' => now()]);
         }
+
+        $this->syncVisitorContext($visitor, $request, 'visit');
 
         $admin = Admin::first();
 
@@ -155,6 +230,8 @@ class VisitorChatController extends Controller
             ]);
         }
 
+        $this->syncVisitorContext($visitor, $request, 'signup');
+
         // Ensure admin conversation exists
         $admin = Admin::first();
         Conversation::findOrCreateVisitorAdmin($visitor->id, $admin ? $admin->id : 1);
@@ -204,7 +281,7 @@ class VisitorChatController extends Controller
             return response()->json(['error' => 'Invalid credentials'], 401);
         }
 
-        $visitor->update(['last_seen_at' => now()]);
+        $this->syncVisitorContext($visitor, $request, 'login');
 
         return response()->json([
             'visitor' => [
@@ -220,16 +297,19 @@ class VisitorChatController extends Controller
 
     // ─── Get Messages (admin conversation) ───
 
-    public function getMessages(Request $request): JsonResponse
+    public function getMessages(Request $request, RealtimeService $realtime): JsonResponse
     {
         $visitor = $this->resolveVisitor($request);
         if (!$visitor) return response()->json(['error' => 'Invalid token'], 401);
 
-        $visitor->update(['last_seen_at' => now()]);
+        $this->syncVisitorContext($visitor, $request);
 
         $admin = Admin::first();
         $conv = Conversation::findOrCreateVisitorAdmin($visitor->id, $admin ? $admin->id : 1);
-        $this->markConversationReadForVisitor($conv, $visitor);
+        $readReceipt = $this->markConversationReadForVisitor($conv, $visitor);
+        if ($readReceipt) {
+            $realtime->publishReadReceipt($conv, $readReceipt);
+        }
 
         $messages = $conv->messages()->get()->map(fn($m) => $this->formatMessage($m));
 
@@ -253,7 +333,7 @@ class VisitorChatController extends Controller
             'socket_id' => 'nullable|string|max:50',
         ]);
 
-        $visitor->update(['last_seen_at' => now()]);
+        $this->syncVisitorContext($visitor, $request);
 
         // Default to admin conversation
         $convId = $request->input('conversation_id');
@@ -329,7 +409,7 @@ class VisitorChatController extends Controller
             return response()->json(['error' => 'Forbidden'], 403);
         }
 
-        $visitor->update(['last_seen_at' => now()]);
+        $this->syncVisitorContext($visitor, $request);
 
         try {
             return response()->json(
@@ -360,7 +440,7 @@ class VisitorChatController extends Controller
             return response()->json(['error' => 'Forbidden'], 403);
         }
 
-        $visitor->update(['last_seen_at' => now()]);
+        $this->syncVisitorContext($visitor, $request);
 
         $realtime->publishTyping(
             $conversation,
@@ -378,7 +458,7 @@ class VisitorChatController extends Controller
         $visitor = $this->resolveVisitor($request);
         if (!$visitor) return response()->json(['error' => 'Invalid token'], 401);
 
-        $visitor->update(['last_seen_at' => now()]);
+        $this->syncVisitorContext($visitor, $request);
 
         $sinceId = (int) $request->query('since_id', 0);
         $convId = (int) $request->query('conversation_id', 0);
@@ -418,7 +498,7 @@ class VisitorChatController extends Controller
             'conversation_id' => 'nullable|integer',
         ]);
 
-        $visitor->update(['last_seen_at' => now()]);
+        $this->syncVisitorContext($visitor, $request);
 
         $conversationId = (int) $request->input('conversation_id', 0);
         $otherOnline = cache('admin_last_poll') && now()->diffInSeconds(cache('admin_last_poll')) < 30;
@@ -460,6 +540,7 @@ class VisitorChatController extends Controller
         if ($request->has('name')) $updates['name'] = $request->name;
         if ($request->has('email')) $updates['email'] = $request->email;
         if (!empty($updates)) $visitor->update($updates);
+        $this->syncVisitorContext($visitor, $request);
 
         return response()->json(['status' => 'saved']);
     }
@@ -470,6 +551,8 @@ class VisitorChatController extends Controller
     {
         $visitor = $this->resolveVisitor($request);
         if (!$visitor) return response()->json(['error' => 'Invalid token'], 401);
+
+        $this->syncVisitorContext($visitor, $request);
 
         $conversations = Conversation::where('participant_one_id', $visitor->id)
             ->orWhere('participant_two_id', $visitor->id)
@@ -524,6 +607,8 @@ class VisitorChatController extends Controller
         $visitor = $this->resolveVisitor($request);
         if (!$visitor) return response()->json(['error' => 'Invalid token'], 401);
 
+        $this->syncVisitorContext($visitor, $request);
+
         $q = $request->query('q', '');
         if (strlen($q) < 2) return response()->json(['users' => []]);
 
@@ -549,6 +634,8 @@ class VisitorChatController extends Controller
         $visitor = $this->resolveVisitor($request);
         if (!$visitor) return response()->json(['error' => 'Invalid token'], 401);
 
+        $this->syncVisitorContext($visitor, $request);
+
         $request->validate([
             'username' => 'required|string',
         ]);
@@ -572,12 +659,12 @@ class VisitorChatController extends Controller
 
     // ─── Get conversation messages (V2V) ───
 
-    public function conversationMessages(Request $request, int $conversationId): JsonResponse
+    public function conversationMessages(Request $request, int $conversationId, RealtimeService $realtime): JsonResponse
     {
         $visitor = $this->resolveVisitor($request);
         if (!$visitor) return response()->json(['error' => 'Invalid token'], 401);
 
-        $visitor->update(['last_seen_at' => now()]);
+        $this->syncVisitorContext($visitor, $request);
 
         $conv = Conversation::findOrFail($conversationId);
         $isParticipant = $conv->participant_one_id === $visitor->id
@@ -587,7 +674,10 @@ class VisitorChatController extends Controller
             return response()->json(['error' => 'Forbidden'], 403);
         }
 
-        $this->markConversationReadForVisitor($conv, $visitor);
+        $readReceipt = $this->markConversationReadForVisitor($conv, $visitor);
+        if ($readReceipt) {
+            $realtime->publishReadReceipt($conv, $readReceipt);
+        }
 
         $messages = $conv->messages()->get()->map(fn($m) => $this->formatMessage($m));
 
@@ -622,12 +712,12 @@ class VisitorChatController extends Controller
 
     // ─── Poll a specific conversation ───
 
-    public function markConversationRead(Request $request, int $conversationId): JsonResponse
+    public function markConversationRead(Request $request, int $conversationId, RealtimeService $realtime): JsonResponse
     {
         $visitor = $this->resolveVisitor($request);
         if (!$visitor) return response()->json(['error' => 'Invalid token'], 401);
 
-        $visitor->update(['last_seen_at' => now()]);
+        $this->syncVisitorContext($visitor, $request);
 
         $conversation = Conversation::findOrFail($conversationId);
         $isParticipant = $conversation->participant_one_id === $visitor->id
@@ -637,20 +727,27 @@ class VisitorChatController extends Controller
             return response()->json(['error' => 'Forbidden'], 403);
         }
 
-        $this->markConversationReadForVisitor($conversation, $visitor);
+        $readReceipt = $this->markConversationReadForVisitor($conversation, $visitor);
+        if ($readReceipt) {
+            $realtime->publishReadReceipt($conversation, $readReceipt);
+        }
 
         return response()->json(['status' => 'ok']);
     }
 
-    public function pollConversation(Request $request, int $conversationId): JsonResponse
+    public function pollConversation(Request $request, int $conversationId, RealtimeService $realtime): JsonResponse
     {
         $visitor = $this->resolveVisitor($request);
         if (!$visitor) return response()->json(['error' => 'Invalid token'], 401);
 
-        $visitor->update(['last_seen_at' => now()]);
+        $this->syncVisitorContext($visitor, $request);
 
         $sinceId = (int) $request->query('since_id', 0);
         $conv = Conversation::findOrFail($conversationId);
+        $readReceipt = $this->markConversationReadForVisitor($conv, $visitor);
+        if ($readReceipt) {
+            $realtime->publishReadReceipt($conv, $readReceipt);
+        }
 
         $messages = $conv->messages()
             ->where('id', '>', $sinceId)

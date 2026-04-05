@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Visitor extends Model
 {
@@ -42,6 +44,16 @@ class Visitor extends Model
     {
         return Conversation::where('participant_one_id', $this->id)
             ->orWhere('participant_two_id', $this->id);
+    }
+
+    public function accessLogs(): HasMany
+    {
+        return $this->hasMany(VisitorAccessLog::class)->latest();
+    }
+
+    public function latestAccessLog(): HasOne
+    {
+        return $this->hasOne(VisitorAccessLog::class)->latestOfMany();
     }
 
     public function profile(): array

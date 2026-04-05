@@ -23,6 +23,7 @@ const NChat = (() => {
         adminPresenceChannel: 'presence-admin.global',
         typingClientEvent: 'client-typing',
         typingEvent: 'typing.updated',
+        readEvent: 'message.read',
     };
 
     function uuid() {
@@ -236,6 +237,10 @@ const NChat = (() => {
                 channel.bind(REALTIME.typingEvent, handlers.onTyping);
             }
 
+            if (handlers.onRead) {
+                channel.bind(REALTIME.readEvent, handlers.onRead);
+            }
+
             this.bindPresenceHandlers(channel, handlers.onPresenceChange);
 
             this._subscriptions[slot] = {
@@ -321,10 +326,29 @@ const NChat = (() => {
             return fallback;
         }
 
+        if (Date.now() - date.getTime() < 60 * 1000) {
+            return 'Just now';
+        }
+
         return date.toLocaleTimeString(undefined, {
             hour: 'numeric',
             minute: '2-digit',
         });
+    }
+
+    function formatStatusTime(timestamp, prefix, fallback = prefix) {
+        if (!timestamp) {
+            return fallback;
+        }
+
+        const time = formatLocalTime(timestamp, '');
+        if (!time) {
+            return fallback;
+        }
+
+        return time === 'Just now'
+            ? `${prefix} just now`
+            : `${prefix} ${time}`;
     }
 
     function normalizeMessage(message) {
@@ -335,6 +359,9 @@ const NChat = (() => {
         return {
             ...message,
             time: formatLocalTime(message.created_at, message.time || ''),
+            read_status: message.is_read
+                ? formatStatusTime(message.read_at || message.created_at, 'Seen', 'Seen')
+                : formatStatusTime(message.created_at, 'Sent', 'Sent'),
         };
     }
 
@@ -366,6 +393,10 @@ const NChat = (() => {
 
     function normalizeRealtimeEvent(event) {
         if (!event) {
+            return event;
+        }
+
+        if (typeof event.last_read_message_id !== 'undefined') {
             return event;
         }
 
@@ -580,6 +611,7 @@ const NChat = (() => {
                         }
                     },
                     onTyping: handlers.onTyping,
+                    onRead: handlers.onRead,
                     onPresenceChange: handlers.onPresenceChange,
                 }
             );
@@ -724,6 +756,15 @@ const NChat = (() => {
             return data;
         },
 
+        async getVisitorProfile(visitorId) {
+            return request(
+                'GET',
+                `/admin/visitors/${visitorId}/profile`,
+                null,
+                this.headers()
+            );
+        },
+
         async sendMessage(visitorId, body, clientId = null) {
             const actualClientId = clientId || uuid();
             const payload = {
@@ -796,6 +837,7 @@ const NChat = (() => {
                         }
                     },
                     onTyping: handlers.onTyping,
+                    onRead: handlers.onRead,
                     onPresenceChange: handlers.onPresenceChange,
                 }
             );
@@ -859,5 +901,7 @@ const NChat = (() => {
         Admin: AdminAPI,
         API_BASE,
         REALTIME,
+        formatLocalTime,
+        formatStatusTime,
     };
 })();
